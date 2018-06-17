@@ -1,0 +1,183 @@
+package redisdump
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+
+	radix "github.com/mediocregopher/radix.v3"
+)
+
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+func stringToRedisCmd(k, val string) []string {
+	return []string{"SET", k, val}
+}
+
+func hashToRedisCmd(k string, val map[string]string) []string {
+	cmd := []string{"HSET", k}
+	for k, v := range val {
+		cmd = append(cmd, k, v)
+	}
+	return cmd
+}
+
+func setToRedisCmd(k string, val []string) []string {
+	cmd := []string{"SADD", k}
+	return append(cmd, val...)
+}
+
+func listToRedisCmd(k string, val []string) []string {
+	cmd := []string{"RPUSH", k}
+	return append(cmd, val...)
+}
+
+func zsetToRedisCmd(k string, val []string) []string {
+	cmd := []string{"RPUSH", k}
+	var key string
+
+	for i, v := range val {
+		if i%2 == 0 {
+			key = v
+			continue
+		}
+
+		cmd = append(cmd, v, key)
+	}
+	return cmd
+}
+
+func genRedisProto(cmd []string) string {
+	s := ""
+	s += "*" + strconv.Itoa(len(cmd)) + "\r\n"
+	for _, arg := range cmd {
+		s += "$" + strconv.Itoa(len(arg)) + "\r\n"
+		s += arg + "\r\n"
+	}
+	return s
+}
+
+func dumpKeys(client radix.Client, keys []string, logger *log.Logger) error {
+	var err error
+	var redisCmd []string
+
+	for _, key := range keys {
+		var keyType string
+
+		err = client.Do(radix.Cmd(&keyType, "TYPE", key))
+		if err != nil {
+			return err
+		}
+
+		switch keyType {
+		case "string":
+			var val string
+			if err = client.Do(radix.Cmd(&val, "GET", key)); err != nil {
+				return err
+			}
+			redisCmd = stringToRedisCmd(key, val)
+
+		case "list":
+			var val []string
+			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
+				return err
+			}
+			redisCmd = listToRedisCmd(key, val)
+
+		case "set":
+			var val []string
+			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
+				return err
+			}
+			redisCmd = setToRedisCmd(key, val)
+
+		case "hash":
+			var val map[string]string
+			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
+				return err
+			}
+			redisCmd = hashToRedisCmd(key, val)
+
+		case "zset":
+			var val []string
+			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
+				return err
+			}
+			redisCmd = zsetToRedisCmd(key, val)
+
+		case "none":
+
+		default:
+			return fmt.Errorf("Key %s is of unreconized type %s", key, keyType)
+		}
+
+		logger.Printf(genRedisProto(redisCmd))
+	}
+
+	return nil
+}
+
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log.Logger, errors chan<- error, done chan<- bool) {
+	for keyBatch := range keyBatches {
+		if err := dumpKeys(client, keyBatch, logger); err != nil {
+			errors <- err
+		}
+	}
+	done <- true
+}
+
+type ProgressNotification struct {
+	Done, Total int
+}
+
+func DumpDb(redisURL string, logger *log.Logger, progressNotifications chan<- ProgressNotification) error {
+	nWorkers := 20
+	client, err := radix.NewPool("tcp", redisURL, nWorkers)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	var keys []string
+	if err = client.Do(radix.Cmd(&keys, "KEYS", "*")); err != nil {
+		return err
+	}
+
+	errors := make(chan error)
+	nErrors := 0
+	go func() {
+		for err := range errors {
+			fmt.Fprintln(os.Stderr, "Error: "+err.Error())
+			nErrors++
+		}
+	}()
+
+	done := make(chan bool)
+	keyBatches := make(chan []string)
+	for i := 0; i < nWorkers; i++ {
+		go dumpKeysWorker(client, keyBatches, logger, errors, done)
+	}
+
+	batchSize := 100
+	for i := 0; i < len(keys) && nErrors == 0; i += batchSize {
+		batchEnd := min(i+batchSize, len(keys))
+		keyBatches <- keys[i:batchEnd]
+		if progressNotifications != nil {
+			progressNotifications <- ProgressNotification{batchEnd, len(keys)}
+		}
+	}
+
+	close(keyBatches)
+
+	for i := 0; i < nWorkers; i++ {
+		<-done
+	}
+
+	return nil
+}
