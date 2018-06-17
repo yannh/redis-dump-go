@@ -39,7 +39,7 @@ func listToRedisCmd(k string, val []string) []string {
 }
 
 func zsetToRedisCmd(k string, val []string) []string {
-	cmd := []string{"RPUSH", k}
+	cmd := []string{"ZADD", k}
 	var key string
 
 	for i, v := range val {

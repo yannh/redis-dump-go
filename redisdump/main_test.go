@@ -46,6 +46,45 @@ func TestStringToRedisCmd(t *testing.T) {
 
 }
 
+func TestHashToRedisCmd(t *testing.T) {
+	type testCase struct {
+		key      string
+		value    map[string]string
+		expected []string
+	}
+
+	testCases := []testCase{
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny"}, expected: []string{"HSET", "Paris", "country", "France", "weather", "sunny"}},
+	}
+
+	for _, test := range testCases {
+		res := hashToRedisCmd(test.key, test.value)
+		if !testEq(res, test.expected) {
+			t.Errorf("Failed generating redis command from Hash for: %s %s", test.key, test.value)
+		}
+	}
+}
+
+func TestZsetToRedisCmd(t *testing.T) {
+	type testCase struct {
+		key      string
+		value    []string
+		expected []string
+	}
+
+	testCases := []testCase{
+		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, expected: []string{"ZADD", "todo", "1", "task1", "2", "task2", "3", "task3"}},
+	}
+
+	for _, test := range testCases {
+		res := zsetToRedisCmd(test.key, test.value)
+		if !testEq(res, test.expected) {
+			t.Errorf("Failed generating redis command from Hash for: %s %s, got %v", test.key, test.value, res)
+		}
+	}
+
+}
+
 func TestGenRedisProto(t *testing.T) {
 	type testCase struct {
 		command  []string
@@ -60,7 +99,7 @@ func TestGenRedisProto(t *testing.T) {
 	for _, test := range testCases {
 		s := genRedisProto(test.command)
 		if s != test.expected {
-			t.Errorf("Failed serializing command to redis protocl: expected %s, got %s", test.expected, s)
+			t.Errorf("Failed serializing command to redis protocol: expected %s, got %s", test.expected, s)
 		}
 	}
 
