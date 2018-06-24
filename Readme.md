@@ -10,6 +10,10 @@ Dump Redis keys to a file. Similar in spirit to https://www.npmjs.com/package/re
 
 Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backups. Please use [Redis backups methods](https://redis.io/topics/persistence) when possible.
 
+## Download
+
+You can download the [latest build from Gitlab](https://gitlab.com/yannhamon/redis-dump-go/-/archive/master/redis-dump-go-master.zip)
+
 ## Build
 
 Given a correctly configured Go environment:
