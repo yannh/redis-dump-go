@@ -10,9 +10,8 @@ stages:
 
 before_script:
   - apk add --no-cache make git
-  - mkdir -p /go/src/github.com/yannh /go/src/_/builds
+  - mkdir -p /go/src/github.com/yannh
   - cp -r $CI_PROJECT_DIR /go/src/github.com/yannh/redis-dump-go
-  - ln -s /go/src/github.com/yannh /go/src/_/builds/yannh
   - cd /go/src/github.com/yannh/redis-dump-go
 
 test:
