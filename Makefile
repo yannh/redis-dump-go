@@ -1,9 +1,6 @@
 #!/usr/bin/make
 
-.PHONY: dep test build docker-image
-
-dep:
-	go get -v -d ./...
+.PHONY: test build docker-image
 
 test:
 	go test ./...

@@ -9,20 +9,22 @@ stages:
   - build
 
 before_script:
+  - apk add --no-cache make git
   - mkdir -p /go/src/github.com/yannh /go/src/_/builds
   - cp -r $CI_PROJECT_DIR /go/src/github.com/yannh/redis-dump-go
   - ln -s /go/src/github.com/yannh /go/src/_/builds/yannh
-  - apk add --no-cache make git
+  - cd /go/src/github.com/yannh/redis-dump-go
 
 test:
   stage: test
   script:
-  - make dep test
+  - make test
 
 build:
   stage: build
   script:
   - make build
+  - cp redis-dump-go ${CI_PROJECT_DIR}/
   artifacts:
     paths:
     - redis-dump-go

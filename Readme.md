@@ -1,3 +1,5 @@
+[![pipeline status](https://gitlab.com/yannhamon/redis-dump-go/badges/master/pipeline.svg)](https://gitlab.com/yannhamon/redis-dump-go/commits/master) [![go report card](https://goreportcard.com/badge/github.com/yannh/redis-dump-go)](https://goreportcard.com/report/github.com/yannh/redis-dump-go)
+
 # Redis-dump-go
 
 Dump Redis keys to a file. Similar in spirit to https://www.npmjs.com/package/redis-dump and https://github.com/delano/redis-dump but:

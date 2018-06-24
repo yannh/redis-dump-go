@@ -132,10 +132,16 @@ func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log
 	done <- true
 }
 
+// ProgressNotification message indicates the progress in dumping the Redis server,
+// and can be used to provide a progress visualisation such as a progress bar.
+// Done is the number of items dumped, Total is the total number of items to dump.
 type ProgressNotification struct {
 	Done, Total int
 }
 
+// DumpDb dumps all Keys from the redis server given by redisURL,
+// to the Logger logger. Progress notification informations
+// are regularly sent to the channel progressNotifications
 func DumpDb(redisURL string, logger *log.Logger, progressNotifications chan<- ProgressNotification) error {
 	nWorkers := 20
 	client, err := radix.NewPool("tcp", redisURL, nWorkers)
