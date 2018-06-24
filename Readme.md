@@ -12,7 +12,7 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 
 ## Download
 
-You can download the [latest build from Gitlab](https://gitlab.com/yannhamon/redis-dump-go/-/archive/master/redis-dump-go-master.zip)
+You can download the [latest build from Gitlab](https://gitlab.com/yannhamon/redis-dump-go/-/jobs/artifacts/master/download?job=build)
 
 ## Build
 
