@@ -1,0 +1,28 @@
+image: golang:1.10-alpine
+
+cache:
+  paths:
+    - /go/src/github.com
+
+stages:
+  - test
+  - build
+
+before_script:
+  - mkdir -p /go/src/github.com/yannh /go/src/_/builds
+  - cp -r $CI_PROJECT_DIR /go/src/github.com/yannh/redis-dump-go
+  - ln -s /go/src/github.com/yannh /go/src/_/builds/yannh
+  - apk add --no-cache make git
+
+test:
+  stage: test
+  script:
+  - make dep test
+
+build:
+  stage: build
+  script:
+  - make build
+  artifacts:
+    paths:
+    - redis-dump-go
