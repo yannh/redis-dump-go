@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/yannh/redis-dump-go/redisdump"
 )
@@ -23,6 +24,7 @@ func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
 
 func realMain() int {
 	var err error
+	var wg sync.WaitGroup
 
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
@@ -32,13 +34,18 @@ func realMain() int {
 	var progressNotifs chan redisdump.ProgressNotification
 	if !(*silent) {
 		progressNotifs = make(chan redisdump.ProgressNotification)
-		defer close(progressNotifs)
-		defer fmt.Fprint(os.Stderr, "\n")
+		wg.Add(1)
+		defer func() {
+			close(progressNotifs)
+			wg.Wait()
+			fmt.Fprint(os.Stderr, "\n")
+		}()
 
 		go func() {
 			for n := range progressNotifs {
 				drawProgressBar(os.Stderr, n.Done, n.Total, 50)
 			}
+			wg.Done()
 		}()
 	}
 
