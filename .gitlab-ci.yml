@@ -21,5 +21,7 @@ build:
   - make build
   - cp redis-dump-go ${CI_PROJECT_DIR}/
   artifacts:
+    name: "$CI_JOB_NAME"
     paths:
     - redis-dump-go
+    when: on_success
