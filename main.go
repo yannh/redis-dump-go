@@ -34,12 +34,13 @@ func realMain() int {
 	var progressNotifs chan redisdump.ProgressNotification
 	if !(*silent) {
 		progressNotifs = make(chan redisdump.ProgressNotification)
-		wg.Add(1)
 		defer func() {
 			close(progressNotifs)
 			wg.Wait()
 			fmt.Fprint(os.Stderr, "\n")
 		}()
+
+		wg.Add(1)
 
 		go func() {
 			for n := range progressNotifs {
