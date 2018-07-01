@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	radix "github.com/mediocregopher/radix.v3"
 )
@@ -53,7 +54,8 @@ func zsetToRedisCmd(k string, val []string) []string {
 	return cmd
 }
 
-func genRedisProto(cmd []string) string {
+// RESPSerializer will serialize cmd to RESP
+func RESPSerializer(cmd []string) string {
 	s := ""
 	s += "*" + strconv.Itoa(len(cmd)) + "\r\n"
 	for _, arg := range cmd {
@@ -63,7 +65,12 @@ func genRedisProto(cmd []string) string {
 	return s
 }
 
-func dumpKeys(client radix.Client, keys []string, logger *log.Logger) error {
+// RedisCmdSerializer will serialize cmd to a string with redis commands
+func RedisCmdSerializer(cmd []string) string {
+	return strings.Join(cmd, " ")
+}
+
+func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer func([]string) string) error {
 	var err error
 	var redisCmd []string
 
@@ -117,15 +124,15 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger) error {
 			return fmt.Errorf("Key %s is of unreconized type %s", key, keyType)
 		}
 
-		logger.Printf(genRedisProto(redisCmd))
+		logger.Printf(serializer(redisCmd))
 	}
 
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log.Logger, errors chan<- error, done chan<- bool) {
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
-		if err := dumpKeys(client, keyBatch, logger); err != nil {
+		if err := dumpKeys(client, keyBatch, logger, serializer); err != nil {
 			errors <- err
 		}
 	}
@@ -142,7 +149,7 @@ type ProgressNotification struct {
 // DumpDb dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpDb(redisURL string, logger *log.Logger, progressNotifications chan<- ProgressNotification) error {
+func DumpDb(redisURL string, logger *log.Logger, serializer func([]string) string, progressNotifications chan<- ProgressNotification) error {
 	nWorkers := 20
 	client, err := radix.NewPool("tcp", redisURL, nWorkers)
 	if err != nil {
@@ -167,7 +174,7 @@ func DumpDb(redisURL string, logger *log.Logger, progressNotifications chan<- Pr
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
-		go dumpKeysWorker(client, keyBatches, logger, errors, done)
+		go dumpKeysWorker(client, keyBatches, logger, serializer, errors, done)
 	}
 
 	batchSize := 100

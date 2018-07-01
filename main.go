@@ -24,23 +24,36 @@ func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
 
 func realMain() int {
 	var err error
-	var wg sync.WaitGroup
 
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
+	output := flag.String("output", "resp", "Output type - can be resp or commands")
 	silent := flag.Bool("s", false, "Silent mode (disable progress bar)")
 	flag.Parse()
 
+	var serializer func([]string) string
+	switch *output {
+	case "resp":
+		serializer = redisdump.RESPSerializer
+
+	case "commands":
+		serializer = redisdump.RedisCmdSerializer
+
+	default:
+		log.Fatalf("Failed parsing parameter flag: can only be resp or json")
+	}
+
 	var progressNotifs chan redisdump.ProgressNotification
+	var wg sync.WaitGroup
 	if !(*silent) {
+		wg.Add(1)
+
 		progressNotifs = make(chan redisdump.ProgressNotification)
 		defer func() {
 			close(progressNotifs)
 			wg.Wait()
 			fmt.Fprint(os.Stderr, "\n")
 		}()
-
-		wg.Add(1)
 
 		go func() {
 			for n := range progressNotifs {
@@ -51,7 +64,7 @@ func realMain() int {
 	}
 
 	logger := log.New(os.Stdout, "", 0)
-	if err = redisdump.DumpDb(*host+":"+strconv.Itoa(*port), logger, progressNotifs); err != nil {
+	if err = redisdump.DumpDb(*host+":"+strconv.Itoa(*port), logger, serializer, progressNotifs); err != nil {
 		fmt.Println(err)
 		return 1
 	}
