@@ -97,7 +97,7 @@ func TestGenRedisProto(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		s := genRedisProto(test.command)
+		s := RESPSerializer(test.command)
 		if s != test.expected {
 			t.Errorf("Failed serializing command to redis protocol: expected %s, got %s", test.expected, s)
 		}
