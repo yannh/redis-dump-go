@@ -24,4 +24,5 @@ build:
     name: "$CI_PROJECT_NAME"
     paths:
     - redis-dump-go
+    - LICENSE.txt
     when: on_success
