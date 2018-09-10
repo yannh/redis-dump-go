@@ -17,6 +17,7 @@ import (
 type Action interface {
 	// Keys returns the keys which will be acted on. Empty slice or nil may be
 	// returned if no keys are being acted on.
+	// The returned slice must not be modified.
 	Keys() []string
 
 	// Run actually performs the Action using the given Conn
@@ -152,14 +153,33 @@ func Cmd(rcv interface{}, cmd string, args ...string) CmdAction {
 	}
 }
 
+func findStreamsKeys(args []string) []string {
+	for i, arg := range args {
+		if strings.ToUpper(arg) != "STREAMS" {
+			continue
+		}
+
+		// after STREAMS only stream keys and IDs can be given and since there must be the same number of keys and ids
+		// we can just take half of remaining arguments as keys. If the number of IDs does not match the number of
+		// keys the command will fail later when send to Redis so no need for us to handle that case.
+		ids := len(args[i+1:]) / 2
+
+		return args[i+1:len(args)-ids]
+	}
+
+	return nil
+}
+
 func (c *cmdAction) Keys() []string {
 	cmd := strings.ToUpper(c.cmd)
 	if cmd == "BITOP" && len(c.args) > 1 { // antirez why you do this
 		return c.args[1:]
+	} else if cmd == "XREAD" || cmd == "XREADGROUP" { // antirez why you still do this
+		return findStreamsKeys(c.args)
 	} else if noKeyCmds[cmd] || len(c.args) == 0 {
 		return nil
 	}
-	return []string{c.args[0]}
+	return c.args[:1]
 }
 
 func (c *cmdAction) MarshalRESP(w io.Writer) error {
@@ -189,9 +209,10 @@ func (c *cmdAction) String() string {
 ////////////////////////////////////////////////////////////////////////////////
 
 type flatCmdAction struct {
-	rcv      interface{}
-	cmd, key string
-	args     []interface{}
+	rcv  interface{}
+	cmd  string
+	key  [1]string // use array to avoid allocation in Keys
+	args []interface{}
 }
 
 // FlatCmd is like Cmd, but the arguments can be of almost any type, and FlatCmd
@@ -225,13 +246,13 @@ func FlatCmd(rcv interface{}, cmd, key string, args ...interface{}) CmdAction {
 	return &flatCmdAction{
 		rcv:  rcv,
 		cmd:  cmd,
-		key:  key,
+		key:  [1]string{key},
 		args: args,
 	}
 }
 
 func (c *flatCmdAction) Keys() []string {
-	return []string{c.key}
+	return c.key[:]
 }
 
 func (c *flatCmdAction) MarshalRESP(w io.Writer) error {
@@ -244,7 +265,7 @@ func (c *flatCmdAction) MarshalRESP(w io.Writer) error {
 	arrL := 2 + a.NumElems()
 	err = resp.ArrayHeader{N: arrL}.MarshalRESP(w)
 	err = marshalBulkString(err, w, c.cmd)
-	err = marshalBulkString(err, w, c.key)
+	err = marshalBulkString(err, w, c.key[0])
 	if err != nil {
 		return err
 	}
@@ -412,10 +433,8 @@ func (p pipeline) Keys() []string {
 }
 
 func (p pipeline) Run(c Conn) error {
-	for _, cmd := range p {
-		if err := c.Encode(cmd); err != nil {
-			return err
-		}
+	if err := c.Encode(p); err != nil {
+		return err
 	}
 	for _, cmd := range p {
 		if err := c.Decode(cmd); err != nil {
@@ -425,10 +444,29 @@ func (p pipeline) Run(c Conn) error {
 	return nil
 }
 
+// MarshalRESP implements the resp.Marshaler interface, so that the pipeline can pass itself to the Conn.Encode method
+// instead of calling Conn.Encode for each CmdAction in the pipeline.
+//
+// This helps with Conn implementations that flush their underlying buffers after each call to Encode, like the default
+// default Conn implementation (connWrap) does, making better use of internal buffering and automatic flushing as well
+// as reducing the number of syscalls that both the client and Redis need to do.
+//
+// Without this, using the default Conn implementation, big pipelines can easily spend much of their time just in
+// flushing (in one case measured, up to 40%).
+func (p pipeline) MarshalRESP(w io.Writer) error {
+	for _, cmd := range p {
+		if err := cmd.MarshalRESP(w); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 type withConn struct {
-	key string
+	key [1]string // use array to avoid allocation in Keys
 	fn  func(Conn) error
 }
 
@@ -442,11 +480,11 @@ type withConn struct {
 // Conn, it doesn't make them transactional. Use MULTI/WATCH/EXEC within a
 // WithConn for transactions, or use EvalScript
 func WithConn(key string, fn func(Conn) error) Action {
-	return &withConn{key, fn}
+	return &withConn{[1]string{key}, fn}
 }
 
 func (wc *withConn) Keys() []string {
-	return []string{wc.key}
+	return wc.key[:]
 }
 
 func (wc *withConn) Run(c Conn) error {
