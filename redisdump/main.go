@@ -150,7 +150,7 @@ type ProgressNotification struct {
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
 func DumpDb(redisURL string, logger *log.Logger, serializer func([]string) string, progressNotifications chan<- ProgressNotification) error {
-	nWorkers := 20
+	nWorkers := 3
 	client, err := radix.NewPool("tcp", redisURL, nWorkers)
 	if err != nil {
 		return err
