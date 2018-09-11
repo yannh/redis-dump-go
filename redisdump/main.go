@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	radix "github.com/mediocregopher/radix.v3"
 )
@@ -17,8 +18,8 @@ func min(a, b int) int {
 	return b
 }
 
-func ttlToRedisCmd(k string, val int32) []string {
-	return []string{"EXPIRE", k, fmt.Sprint(val)}
+func ttlToRedisCmd(k string, val int64) []string {
+	return []string{"EXPIREAT", k, fmt.Sprint(time.Now().Unix() + val)}
 }
 
 func stringToRedisCmd(k, val string) []string {
@@ -132,7 +133,7 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 		logger.Printf(serializer(redisCmd))
 
 		if withTTL {
-			var ttl int32
+			var ttl int64
 			if err = client.Do(radix.Cmd(&ttl, "TTL", key)); err != nil {
 				return err
 			}
