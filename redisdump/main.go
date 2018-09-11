@@ -17,6 +17,10 @@ func min(a, b int) int {
 	return b
 }
 
+func ttlToRedisCmd(k string, val int32) []string {
+	return []string{"EXPIRE", k, fmt.Sprint(val)}
+}
+
 func stringToRedisCmd(k, val string) []string {
 	return []string{"SET", k, val}
 }
@@ -73,6 +77,7 @@ func RedisCmdSerializer(cmd []string) string {
 func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer func([]string) string) error {
 	var err error
 	var redisCmd []string
+	var withTTL = true
 
 	for _, key := range keys {
 		var keyType string
@@ -125,6 +130,17 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 		}
 
 		logger.Printf(serializer(redisCmd))
+
+		if withTTL {
+			var ttl int32
+			if err = client.Do(radix.Cmd(&ttl, "TTL", key)); err != nil {
+				return err
+			}
+			if ttl > 0 {
+				redisCmd = ttlToRedisCmd(key, ttl)
+				logger.Printf(serializer(redisCmd))
+			}
+		}
 	}
 
 	return nil

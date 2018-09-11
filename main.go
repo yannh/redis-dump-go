@@ -25,6 +25,7 @@ func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
 func realMain() int {
 	var err error
 
+	// TODO: Number of workers & TTL as parameters
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
