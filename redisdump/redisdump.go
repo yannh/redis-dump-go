@@ -164,6 +164,29 @@ type ProgressNotification struct {
 	Done, Total int
 }
 
+func parseKeyspaceInfo(keyspaceInfo string) ([]uint8, error) {
+	var dbs []uint8
+
+	scanner := bufio.NewScanner(strings.NewReader(keyspaceInfo))
+
+	for scanner.Scan() {
+		if strings.HasPrefix(scanner.Text(), "db") {
+			s := scanner.Text()[2:strings.IndexAny(scanner.Text(), ":")]
+			i, err := strconv.ParseUint(s, 10, 8)
+			if err != nil {
+				return nil, err
+			}
+			if i > 16 {
+				return nil, fmt.Errorf("Error parsing INFO keyspace")
+			}
+
+			dbs = append(dbs, uint8(i))
+		}
+	}
+
+	return dbs, nil
+}
+
 func getDBIndexes(redisURL string) ([]uint8, error) {
 	client, err := radix.NewPool("tcp", redisURL, 1)
 	if err != nil {
@@ -176,21 +199,27 @@ func getDBIndexes(redisURL string) ([]uint8, error) {
 		return nil, err
 	}
 
-	var dbs []uint8
-	scanner := bufio.NewScanner(strings.NewReader(keyspaceInfo))
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "db") {
-			s := scanner.Text()[2:strings.IndexAny(scanner.Text(), ":")]
-			i, _ := strconv.ParseUint(s, 10, 8)
-			dbs = append(dbs, uint8(i))
-		}
-	}
+	return parseKeyspaceInfo(keyspaceInfo)
+}
 
-	return dbs, nil
+func withDBSelection(dial radix.ConnFunc, db uint8) radix.ConnFunc {
+	return func(network, addr string) (radix.Conn, error) {
+		conn, err := dial(network, addr)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := conn.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		return conn, nil
+	}
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, db uint8, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisURL string, db uint8, nworkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -202,21 +231,8 @@ func DumpDB(redisURL string, db uint8, logger *log.Logger, serializer func([]str
 		}
 	}()
 
-	withDBConnFunc := func(network, addr string) (radix.Conn, error) {
-		conn, err := radix.DialTimeout(network, addr, 1*time.Minute)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := conn.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
-			conn.Close()
-			return nil, err
-		}
-		return conn, nil
-	}
-
 	nWorkers := 3
-	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(withDBConnFunc))
+	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(withDBSelection(radix.Dial, db)))
 	if err != nil {
 		return err
 	}
@@ -259,13 +275,13 @@ func DumpDB(redisURL string, db uint8, logger *log.Logger, serializer func([]str
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisURL string, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(redisURL string, nWorkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	dbs, err := getDBIndexes(redisURL)
 	if err != nil {
 		return err
 	}
 	for _, db := range dbs {
-		if err = DumpDB(redisURL, db, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisURL, db, nWorkers, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
