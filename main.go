@@ -65,7 +65,7 @@ func realMain() int {
 	}
 
 	logger := log.New(os.Stdout, "", 0)
-	if err = redisdump.DumpDb(*host+":"+strconv.Itoa(*port), logger, serializer, progressNotifs); err != nil {
+	if err = redisdump.DumpServer(*host+":"+strconv.Itoa(*port), logger, serializer, progressNotifs); err != nil {
 		fmt.Println(err)
 		return 1
 	}
