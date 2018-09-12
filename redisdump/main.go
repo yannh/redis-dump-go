@@ -149,9 +149,9 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 
 func selectDatabase(client radix.Client, db int) error {
 	// switch db
-
 	p := radix.Pipeline(
 		radix.Cmd(nil, "select", strconv.Itoa(db)))
+
 	if err := client.Do(p); err != nil {
 		return err
 	}
@@ -159,11 +159,6 @@ func selectDatabase(client radix.Client, db int) error {
 }
 
 func dumpKeysWorker(client radix.Client, db int, keyBatches <-chan []string, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
-
-	var err error
-
-	err = selectDatabase(client, db)
-	errors <- err
 
 	for keyBatch := range keyBatches {
 		if err := dumpKeys(client, keyBatch, logger, serializer); err != nil {
@@ -190,6 +185,10 @@ func DumpDb(redisURL string, db int, logger *log.Logger, serializer func([]strin
 		return err
 	}
 	defer client.Close()
+
+	if err := selectDatabase(client, db); err != nil {
+		return err
+	}
 
 	var keys []string
 	if err = client.Do(radix.Cmd(&keys, "KEYS", "*")); err != nil {
