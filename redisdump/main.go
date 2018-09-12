@@ -147,7 +147,24 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
+func selectDatabase(client radix.Client, db int) error {
+	// switch db
+
+	p := radix.Pipeline(
+		radix.Cmd(nil, "select", strconv.Itoa(db)))
+	if err := client.Do(p); err != nil {
+		return err
+	}
+	return nil
+}
+
+func dumpKeysWorker(client radix.Client, db int, keyBatches <-chan []string, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
+
+	var err error
+
+	err = selectDatabase(client, db)
+	errors <- err
+
 	for keyBatch := range keyBatches {
 		if err := dumpKeys(client, keyBatch, logger, serializer); err != nil {
 			errors <- err
@@ -166,7 +183,7 @@ type ProgressNotification struct {
 // DumpDb dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpDb(redisURL string, logger *log.Logger, serializer func([]string) string, progressNotifications chan<- ProgressNotification) error {
+func DumpDb(redisURL string, db int, logger *log.Logger, serializer func([]string) string, progressNotifications chan<- ProgressNotification) error {
 	nWorkers := 3
 	client, err := radix.NewPool("tcp", redisURL, nWorkers)
 	if err != nil {
@@ -191,7 +208,7 @@ func DumpDb(redisURL string, logger *log.Logger, serializer func([]string) strin
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
-		go dumpKeysWorker(client, keyBatches, logger, serializer, errors, done)
+		go dumpKeysWorker(client, db, keyBatches, logger, serializer, errors, done)
 	}
 
 	batchSize := 100
