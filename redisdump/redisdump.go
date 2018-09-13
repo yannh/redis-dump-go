@@ -131,7 +131,7 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 			return fmt.Errorf("Key %s is of unreconized type %s", key, keyType)
 		}
 
-		logger.Printf(serializer(redisCmd))
+		logger.Print(serializer(redisCmd))
 
 		if withTTL {
 			var ttl int64

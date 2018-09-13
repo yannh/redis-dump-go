@@ -106,7 +106,7 @@ func TestZsetToRedisCmd(t *testing.T) {
 
 }
 
-func TestGenRedisProto(t *testing.T) {
+func TestRESPSerializer(t *testing.T) {
 	type testCase struct {
 		command  []string
 		expected string
@@ -123,7 +123,6 @@ func TestGenRedisProto(t *testing.T) {
 			t.Errorf("Failed serializing command to redis protocol: expected %s, got %s", test.expected, s)
 		}
 	}
-
 }
 
 func TestParseKeyspaceInfo(t *testing.T) {
