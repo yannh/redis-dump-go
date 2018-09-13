@@ -223,7 +223,7 @@ func withDBSelection(dial radix.ConnFunc, db uint8) radix.ConnFunc {
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, db uint8, nworkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -235,7 +235,6 @@ func DumpDB(redisURL string, db uint8, nworkers int, logger *log.Logger, seriali
 		}
 	}()
 
-	nWorkers := 3
 	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(withDBSelection(radix.Dial, db)))
 	if err != nil {
 		return err
