@@ -1,8 +1,10 @@
 package redisdump
 
-import "testing"
+import (
+	"testing"
+)
 
-func testEq(a, b []string) bool {
+func testEqString(a, b []string) bool {
 
 	if a == nil && b == nil {
 		return true
@@ -16,6 +18,23 @@ func testEq(a, b []string) bool {
 		return false
 	}
 
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func testEqUint8(a, b []uint8) bool {
+	// If one is nil, the other must also be nil.
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	if len(a) != len(b) {
+		return false
+	}
 	for i := range a {
 		if a[i] != b[i] {
 			return false
@@ -39,7 +58,7 @@ func TestStringToRedisCmd(t *testing.T) {
 
 	for _, test := range testCases {
 		res := stringToRedisCmd(test.key, test.value)
-		if !testEq(res, test.expected) {
+		if !testEqString(res, test.expected) {
 			t.Errorf("Failed generating redis command from string for: %s %s", test.key, test.value)
 		}
 	}
@@ -59,8 +78,10 @@ func TestHashToRedisCmd(t *testing.T) {
 
 	for _, test := range testCases {
 		res := hashToRedisCmd(test.key, test.value)
-		if !testEq(res, test.expected) {
-			t.Errorf("Failed generating redis command from Hash for: %s %s", test.key, test.value)
+		for i := 2; i < len(test.expected); i = i + 2 {
+			if test.value[test.expected[i]] != test.expected[i+1] {
+				t.Errorf("Failed generating redis command from Hash for: %s %s, got %s", test.key, test.value, res)
+			}
 		}
 	}
 }
@@ -78,7 +99,7 @@ func TestZsetToRedisCmd(t *testing.T) {
 
 	for _, test := range testCases {
 		res := zsetToRedisCmd(test.key, test.value)
-		if !testEq(res, test.expected) {
+		if !testEqString(res, test.expected) {
 			t.Errorf("Failed generating redis command from Hash for: %s %s, got %v", test.key, test.value, res)
 		}
 	}
@@ -103,4 +124,18 @@ func TestGenRedisProto(t *testing.T) {
 		}
 	}
 
+}
+
+func TestParseKeyspaceInfo(t *testing.T) {
+	keyspaceInfo := `# Keyspace
+	db0:keys=2,expires=1,avg_ttl=1009946407050
+	db2:keys=1,expires=0,avg_ttl=0`
+
+	dbIds, err := parseKeyspaceInfo(keyspaceInfo)
+	if err != nil {
+		t.Errorf("Failed parsing keyspaceInfo" + err.Error())
+	}
+	if !testEqUint8(dbIds, []uint8{0, 2}) {
+		t.Errorf("Failed parsing keyspaceInfo: got %v", dbIds)
+	}
 }

@@ -170,18 +170,22 @@ func parseKeyspaceInfo(keyspaceInfo string) ([]uint8, error) {
 	scanner := bufio.NewScanner(strings.NewReader(keyspaceInfo))
 
 	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "db") {
-			s := scanner.Text()[2:strings.IndexAny(scanner.Text(), ":")]
-			i, err := strconv.ParseUint(s, 10, 8)
-			if err != nil {
-				return nil, err
-			}
-			if i > 16 {
-				return nil, fmt.Errorf("Error parsing INFO keyspace")
-			}
+		line := strings.TrimSpace(scanner.Text())
 
-			dbs = append(dbs, uint8(i))
+		if !strings.HasPrefix(line, "db") {
+			continue
 		}
+
+		dbIndexString := line[2:strings.IndexAny(line, ":")]
+		dbIndex, err := strconv.ParseUint(dbIndexString, 10, 8)
+		if err != nil {
+			return nil, err
+		}
+		if dbIndex > 16 {
+			return nil, fmt.Errorf("Error parsing INFO keyspace")
+		}
+
+		dbs = append(dbs, uint8(dbIndex))
 	}
 
 	return dbs, nil
@@ -280,6 +284,7 @@ func DumpServer(redisURL string, nWorkers int, logger *log.Logger, serializer fu
 	if err != nil {
 		return err
 	}
+
 	for _, db := range dbs {
 		if err = DumpDB(redisURL, db, nWorkers, logger, serializer, progress); err != nil {
 			return err
