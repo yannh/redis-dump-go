@@ -222,6 +222,35 @@ func withDBSelection(dial radix.ConnFunc, db uint8) radix.ConnFunc {
 	}
 }
 
+func scanKeys(client radix.Client, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
+	keyBatchSize := 100
+	s := radix.NewScanner(client, radix.ScanOpts{Command: "SCAN", Count: keyBatchSize})
+
+	var dbSize int
+	if err := client.Do(radix.Cmd(&dbSize, "DBSIZE")); err != nil {
+		return err
+	}
+
+	nProcessed := 0
+	var key string
+	var keyBatch []string
+	for s.Next(&key) {
+		keyBatch = append(keyBatch, key)
+		if len(keyBatch) >= keyBatchSize {
+			nProcessed += len(keyBatch)
+			keyBatches <- keyBatch
+			keyBatch = nil
+			progressNotifications <- ProgressNotification{nProcessed, dbSize}
+		}
+	}
+
+	keyBatches <- keyBatch
+	nProcessed += len(keyBatch)
+	progressNotifications <- ProgressNotification{nProcessed, dbSize}
+
+	return s.Close()
+}
+
 // DumpDB dumps all keys from a single Redis DB
 func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
@@ -246,26 +275,13 @@ func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, seriali
 	}
 	logger.Printf(serializer([]string{"SELECT", fmt.Sprint(db)}))
 
-	var keys []string
-	if err = client.Do(radix.Cmd(&keys, "KEYS", "*")); err != nil {
-		return err
-	}
-
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
 		go dumpKeysWorker(client, keyBatches, logger, serializer, errors, done)
 	}
 
-	batchSize := 100
-	for i := 0; i < len(keys) && nErrors == 0; i += batchSize {
-		batchEnd := min(i+batchSize, len(keys))
-		keyBatches <- keys[i:batchEnd]
-		if progress != nil {
-			progress <- ProgressNotification{batchEnd, len(keys)}
-		}
-	}
-
+	scanKeys(client, keyBatches, progress)
 	close(keyBatches)
 
 	for i := 0; i < nWorkers; i++ {
