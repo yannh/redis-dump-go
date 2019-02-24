@@ -4,18 +4,18 @@
 
 Dump Redis keys to a file. Similar in spirit to https://www.npmjs.com/package/redis-dump and https://github.com/delano/redis-dump but:
 
- * Will dump keys across several processes & connections
- * Uses SCAN rather than KEYS * for much reduced memory footprint with large databases
- * Easy to deploy & containerize - single binary.
- * Generates a [RESP](https://redis.io/topics/protocol) file rather than a JSON or a list of commands. This is faster to ingest, and [recommended by Redis](https://redis.io/topics/mass-insert) for mass-inserts.
+* Will dump keys across several processes & connections
+* Uses SCAN rather than KEYS * for much reduced memory footprint with large databases
+* Easy to deploy & containerize - single binary.
+* Generates a [RESP](https://redis.io/topics/protocol) file rather than a JSON or a list of commands. This is faster to ingest, and [recommended by Redis](https://redis.io/topics/mass-insert) for mass-inserts.
 
 Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backups. Please use [Redis backups methods](https://redis.io/topics/persistence) when possible.
 
 ## Features
 
- * Dumps all databases present on the Redis server
- * Keys TTL are preserved by default
- * Configurable Output (Redis commands, RESP)
+* Dumps all databases present on the Redis server
+* Keys TTL are preserved by default
+* Configurable Output (Redis commands, RESP)
 
 ## Download
 
