@@ -14,6 +14,9 @@ import (
 )
 
 func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
+	if nElements == 0 {
+		return
+	}
 	percent := currentPosition * 100 / nElements
 	nBars := widgetSize * percent / 100
 
@@ -29,6 +32,7 @@ func realMain() int {
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
 	nWorkers := flag.Int("n", 10, "Parallel workers")
+	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
 	silent := flag.Bool("s", false, "Silent mode (disable progress bar)")
 	flag.Parse()
@@ -66,11 +70,10 @@ func realMain() int {
 	}
 
 	logger := log.New(os.Stdout, "", 0)
-	if err = redisdump.DumpServer(*host+":"+strconv.Itoa(*port), *nWorkers, logger, serializer, progressNotifs); err != nil {
+	if err = redisdump.DumpServer(*host+":"+strconv.Itoa(*port), *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
 		fmt.Println(err)
 		return 1
 	}
-
 	return 0
 }
 

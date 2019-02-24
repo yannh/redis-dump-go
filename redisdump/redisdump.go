@@ -76,10 +76,9 @@ func RedisCmdSerializer(cmd []string) string {
 	return strings.Join(cmd, " ")
 }
 
-func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer func([]string) string) error {
+func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer func([]string) string) error {
 	var err error
 	var redisCmd []string
-	var withTTL = true
 
 	for _, key := range keys {
 		var keyType string
@@ -148,9 +147,9 @@ func dumpKeys(client radix.Client, keys []string, logger *log.Logger, serializer
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
-		if err := dumpKeys(client, keyBatch, logger, serializer); err != nil {
+		if err := dumpKeys(client, keyBatch, withTTL, logger, serializer); err != nil {
 			errors <- err
 		}
 	}
@@ -252,7 +251,7 @@ func scanKeys(client radix.Client, keyBatches chan<- []string, progressNotificat
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisURL string, db uint8, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -278,7 +277,7 @@ func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, seriali
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
-		go dumpKeysWorker(client, keyBatches, logger, serializer, errors, done)
+		go dumpKeysWorker(client, keyBatches, withTTL, logger, serializer, errors, done)
 	}
 
 	scanKeys(client, keyBatches, progress)
@@ -294,14 +293,14 @@ func DumpDB(redisURL string, db uint8, nWorkers int, logger *log.Logger, seriali
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisURL string, nWorkers int, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(redisURL string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	dbs, err := getDBIndexes(redisURL)
 	if err != nil {
 		return err
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisURL, db, nWorkers, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisURL, db, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
