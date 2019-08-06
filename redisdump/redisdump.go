@@ -311,9 +311,9 @@ func DumpDB(redisURL string, nWorkers int, withTTL bool, logger *log.Logger, ser
 
 func redisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
 	switch {
-	case redisDB == "" && redisPassword != "":
+	case redisDB == "":
 		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
-	case redisDB != "" && redisPassword != "":
+	case redisDB != "":
 		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort) + "/" + redisDB
 	}
 
