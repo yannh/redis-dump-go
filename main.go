@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -72,7 +71,7 @@ func realMain() int {
 	}
 
 	logger := log.New(os.Stdout, "", 0)
-	if err = redisdump.DumpServer(*host+":"+strconv.Itoa(*port), redisPassword, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+	if err = redisdump.DumpServer(*host, *port, redisPassword, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
 		fmt.Println(err)
 		return 1
 	}

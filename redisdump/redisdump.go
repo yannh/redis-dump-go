@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	radix "github.com/mediocregopher/radix.v3"
+	radix "github.com/mediocregopher/radix/v3"
 )
 
 func min(a, b int) int {
@@ -190,15 +190,8 @@ func parseKeyspaceInfo(keyspaceInfo string) ([]uint8, error) {
 	return dbs, nil
 }
 
-func getDBIndexes(redisURL string, redisPassword string) ([]uint8, error) {
-	var pOpts radix.PoolOpt
-	if redisPassword != "" {
-		pOpts = radix.PoolConnFunc(withAuth(radix.Dial, redisPassword))
-	} else {
-		pOpts = radix.PoolConnFunc(radix.Dial)
-	}
-
-	client, err := radix.NewPool("tcp", redisURL, 1, pOpts)
+func getDBIndexes(redisURL string) ([]uint8, error) {
+	client, err := radix.NewPool("tcp", redisURL, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +267,7 @@ func scanKeys(client radix.Client, keyBatches chan<- []string, progressNotificat
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, redisPassword string, db uint8, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisURL string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -286,18 +279,14 @@ func DumpDB(redisURL string, redisPassword string, db uint8, nWorkers int, withT
 		}
 	}()
 
-	var pOpts radix.PoolOpt
-	if redisPassword != "" {
-		pOpts = radix.PoolConnFunc(withDBSelection(withAuth(radix.Dial, redisPassword), db))
-	} else {
-		pOpts = radix.PoolConnFunc(withDBSelection(radix.Dial, db))
-	}
-
-	client, err := radix.NewPool("tcp", redisURL, nWorkers, pOpts)
+	client, err := radix.NewPool("tcp", redisURL, nWorkers)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
+
+	splitURL := strings.Split(redisURL, "/")
+	db := splitURL[len(splitURL)-1]
 
 	if err = client.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
 		return err
@@ -320,17 +309,30 @@ func DumpDB(redisURL string, redisPassword string, db uint8, nWorkers int, withT
 	return nil
 }
 
+func redisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
+	switch {
+	case redisDB == "" && redisPassword != "":
+		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
+	case redisDB != "" && redisPassword != "":
+		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort) + "/" + redisDB
+	}
+
+	return ""
+}
+
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisURL string, redisPassword string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
-	dbs, err := getDBIndexes(redisURL, redisPassword)
+func DumpServer(redisHost string, redisPort int, redisPassword string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+	url := redisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
+	dbs, err := getDBIndexes(url)
 	if err != nil {
 		return err
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisURL, redisPassword, db, nWorkers, withTTL, logger, serializer, progress); err != nil {
+		url := redisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
+		if err = DumpDB(url, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
