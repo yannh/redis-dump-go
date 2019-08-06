@@ -190,8 +190,15 @@ func parseKeyspaceInfo(keyspaceInfo string) ([]uint8, error) {
 	return dbs, nil
 }
 
-func getDBIndexes(redisURL string) ([]uint8, error) {
-	client, err := radix.NewPool("tcp", redisURL, 1)
+func getDBIndexes(redisURL string, redisPassword string) ([]uint8, error) {
+	var pOpts radix.PoolOpt
+	if redisPassword != "" {
+		pOpts = radix.PoolConnFunc(withAuth(radix.Dial, redisPassword))
+	} else {
+		pOpts = radix.PoolConnFunc(radix.Dial)
+	}
+
+	client, err := radix.NewPool("tcp", redisURL, 1, pOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +220,22 @@ func withDBSelection(dial radix.ConnFunc, db uint8) radix.ConnFunc {
 		}
 
 		if err := conn.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		return conn, nil
+	}
+}
+
+func withAuth(dial radix.ConnFunc, redisPassword string) radix.ConnFunc {
+	return func(network, addr string) (radix.Conn, error) {
+		conn, err := dial(network, addr)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := conn.Do(radix.Cmd(nil, "AUTH", fmt.Sprint(redisPassword))); err != nil {
 			conn.Close()
 			return nil, err
 		}
@@ -251,7 +274,7 @@ func scanKeys(client radix.Client, keyBatches chan<- []string, progressNotificat
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, db uint8, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisURL string, redisPassword string, db uint8, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -263,7 +286,14 @@ func DumpDB(redisURL string, db uint8, nWorkers int, withTTL bool, logger *log.L
 		}
 	}()
 
-	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(withDBSelection(radix.Dial, db)))
+	var pOpts radix.PoolOpt
+	if redisPassword != "" {
+		pOpts = radix.PoolConnFunc(withDBSelection(withAuth(radix.Dial, redisPassword), db))
+	} else {
+		pOpts = radix.PoolConnFunc(withDBSelection(radix.Dial, db))
+	}
+
+	client, err := radix.NewPool("tcp", redisURL, nWorkers, pOpts)
 	if err != nil {
 		return err
 	}
@@ -293,14 +323,14 @@ func DumpDB(redisURL string, db uint8, nWorkers int, withTTL bool, logger *log.L
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisURL string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
-	dbs, err := getDBIndexes(redisURL)
+func DumpServer(redisURL string, redisPassword string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+	dbs, err := getDBIndexes(redisURL, redisPassword)
 	if err != nil {
 		return err
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisURL, db, nWorkers, withTTL, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisURL, redisPassword, db, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
 	}

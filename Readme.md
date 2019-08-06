@@ -16,23 +16,13 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 * Dumps all databases present on the Redis server
 * Keys TTL are preserved by default
 * Configurable Output (Redis commands, RESP)
+* Redis password-authentication
 
 ## Download
 
 You can download the [latest build from Gitlab](https://gitlab.com/yannhamon/redis-dump-go/-/jobs/artifacts/master/download?job=build)
 
-## Build
-
-Given a correctly configured Go environment:
-
-```
-$ go get github.com/yannh/redis-dump-go
-$ cd ${GOPATH}/src/github.com/yannh/redis-dump-go
-$ go test ./...
-$ go install
-```
-
-## Usage
+## Run
 
 ```
 $ redis-dump-go -h
@@ -48,6 +38,24 @@ Usage of ./redis-dump-go:
   -s    Silent mode (disable progress bar)
 $ redis-dump-go > redis-backup.resp
 [==================================================] 100% [5/5]
+```
+
+For password-protected Redis servers, set the shell variable REDISDUMPGO_AUTH:
+
+```
+$ export REDISDUMPGO_AUTH=myRedisPassword
+$ redis-dump-go
+```
+
+## Build
+
+Given a correctly configured Go environment:
+
+```
+$ go get github.com/yannh/redis-dump-go
+$ cd ${GOPATH}/src/github.com/yannh/redis-dump-go
+$ go test ./...
+$ go install
 ```
 
 ## Importing the data
