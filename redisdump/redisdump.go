@@ -331,7 +331,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, nWorkers 
 	}
 
 	for _, db := range dbs {
-		url := redisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
+		url = redisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
 		if err = DumpDB(url, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
