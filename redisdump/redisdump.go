@@ -139,7 +139,7 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			}
 			if ttl > 0 {
 				redisCmd = ttlToRedisCmd(key, ttl)
-				logger.Printf(serializer(redisCmd))
+				logger.Print(serializer(redisCmd))
 			}
 		}
 	}
