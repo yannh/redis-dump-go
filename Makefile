@@ -2,6 +2,8 @@
 
 .PHONY: test build docker-image
 
+export GOFLAGS=-mod=vendor
+
 test:
 	go test ./...
 	go vet ./...
