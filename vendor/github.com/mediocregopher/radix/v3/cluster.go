@@ -110,12 +110,15 @@ func ClusterWithTrace(ct trace.ClusterTrace) ClusterOpt {
 // with it, including a set of pools to each of its instances. All methods on
 // Cluster are thread-safe
 type Cluster struct {
+	// Atomic fields must be at the beginning of the struct since they must be
+	// correctly aligned or else access may cause panics on 32-bit architectures
+	// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	lastClusterdown int64 // unix timestamp in milliseconds, atomic
+
 	co clusterOpts
 
 	// used to deduplicate calls to sync
 	syncDedupe *dedupe
-
-	lastClusterdown int64 // unix timestamp in milliseconds, atomic
 
 	l              sync.RWMutex
 	pools          map[string]Client
@@ -378,19 +381,24 @@ func (c *Cluster) sync(p Client) error {
 
 	c.traceTopoChanged(c.topo, tt)
 
-	// this is a big bit of code to totally lockdown the cluster for, but at the
-	// same time Close _shouldn't_ block significantly
-	c.l.Lock()
-	defer c.l.Unlock()
-	c.topo = tt
-	c.primTopo = tt.Primaries()
+	var toclose []Client
+	func() {
+		c.l.Lock()
+		defer c.l.Unlock()
+		c.topo = tt
+		c.primTopo = tt.Primaries()
 
-	tm := tt.Map()
-	for addr, p := range c.pools {
-		if _, ok := tm[addr]; !ok {
-			p.Close()
-			delete(c.pools, addr)
+		tm := tt.Map()
+		for addr, p := range c.pools {
+			if _, ok := tm[addr]; !ok {
+				toclose = append(toclose, p)
+				delete(c.pools, addr)
+			}
 		}
+	}()
+
+	for _, p := range toclose {
+		p.Close()
 	}
 
 	return nil

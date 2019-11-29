@@ -1,5 +1,30 @@
 Changelog from v3.0.1 and up. Prior changes don't have a changelog.
 
+# v3.4.2
+
+* Fix alignment for atomic values in structs (PR #171)
+
+* Fix closing of sentinel instances while updating state (PR #173)
+
+# v3.4.1
+
+* Update xerrors package (PR #165)
+
+* Have cluster Pools be closed outside of lock, to reduce contention during
+  failover events (PR #168)
+
+# v3.4.0
+
+* Add `PersistentPubSubWithOpts` function, deprecating the old
+  `PersistentPubSub` function. (PR #156)
+
+* Make decode errors a bit more helpful. (PR #157)
+
+* Refactor Pool to rely on its inner lock less, simplifying the code quite a bit
+  and hopefully speeding up certain actions. (PR #160)
+
+* Various documentation updates. (PR #138, Issue #162)
+
 # v3.3.2
 
 * Have `resp2.Error` match with a `resp.ErrDiscarded` when using `errors.As`.
