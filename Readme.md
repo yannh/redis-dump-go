@@ -1,4 +1,4 @@
-[![pipeline status](https://gitlab.com/yannhamon/redis-dump-go/badges/master/pipeline.svg)](https://gitlab.com/yannhamon/redis-dump-go/commits/master) [![go report card](https://goreportcard.com/badge/github.com/yannh/redis-dump-go)](https://goreportcard.com/report/github.com/yannh/redis-dump-go)
+[![Build status](https://github.com/yannh/redis-dump-go/workflows/build/badge.svg?branch=master)](https://github.com/yannh/redis-dump-go/actions?query=branch%3Amaster)  [![go report card](https://goreportcard.com/badge/github.com/yannh/redis-dump-go)](https://goreportcard.com/report/github.com/yannh/redis-dump-go)
 
 # Redis-dump-go
 
@@ -17,10 +17,6 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 * Keys TTL are preserved by default
 * Configurable Output (Redis commands, RESP)
 * Redis password-authentication
-
-## Download
-
-You can download the [latest build from Gitlab](https://gitlab.com/yannhamon/redis-dump-go/-/jobs/artifacts/master/download?job=build)
 
 ## Run
 
