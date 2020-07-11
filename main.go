@@ -65,25 +65,26 @@ func realMain() int {
 
 	redisPassword := os.Getenv("REDISDUMPGO_AUTH")
 
-	var progressNotifs chan redisdump.ProgressNotification
+	progressNotifs := make(chan redisdump.ProgressNotification)
 	var wg sync.WaitGroup
-	if !(*silent) {
-		wg.Add(1)
+	wg.Add(1)
 
-		progressNotifs = make(chan redisdump.ProgressNotification)
-		defer func() {
-			close(progressNotifs)
-			wg.Wait()
+	defer func() {
+		close(progressNotifs)
+		wg.Wait()
+		if !(*silent) {
 			fmt.Fprint(os.Stderr, "\n")
-		}()
+		}
+	}()
 
-		go func() {
-			for n := range progressNotifs {
+	go func() {
+		for n := range progressNotifs {
+			if !(*silent) {
 				drawProgressBar(os.Stderr, n.Done, n.Total, 50)
 			}
-			wg.Done()
-		}()
-	}
+		}
+		wg.Done()
+	}()
 
 	logger := log.New(os.Stdout, "", 0)
 	if db == nil {
