@@ -4,6 +4,8 @@
 
 export GOFLAGS=-mod=vendor
 
+all: test build
+
 test:
 	go test ./...
 	go vet ./...

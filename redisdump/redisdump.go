@@ -309,7 +309,7 @@ func DumpDB(redisURL string, nWorkers int, withTTL bool, logger *log.Logger, ser
 	return nil
 }
 
-func redisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
+func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
 	switch {
 	case redisDB == "":
 		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
@@ -324,14 +324,14 @@ func redisURL(redisHost string, redisPort string, redisDB string, redisPassword 
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
 func DumpServer(redisHost string, redisPort int, redisPassword string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
-	url := redisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
+	url := RedisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
 	dbs, err := getDBIndexes(url)
 	if err != nil {
 		return err
 	}
 
 	for _, db := range dbs {
-		url = redisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
+		url = RedisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
 		if err = DumpDB(url, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
