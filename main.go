@@ -22,6 +22,10 @@ func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
 	bars := strings.Repeat("=", nBars)
 	spaces := strings.Repeat(" ", widgetSize-nBars)
 	fmt.Fprintf(to, "\r[%s%s] %3d%% [%d/%d]", bars, spaces, int(percent), currentPosition, nElements)
+
+	if currentPosition == nElements {
+		fmt.Fprint(to, "\n")
+	}
 }
 
 func isFlagPassed(name string) bool {
@@ -72,9 +76,6 @@ func realMain() int {
 	defer func() {
 		close(progressNotifs)
 		wg.Wait()
-		if !(*silent) {
-			fmt.Fprint(os.Stderr, "\n")
-		}
 	}()
 
 	go func() {
