@@ -6,26 +6,17 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/yannh/redis-dump-go/redisdump"
 )
 
-func drawProgressBar(to io.Writer, currentPosition, nElements, widgetSize int) {
-	if nElements == 0 {
+func drawProgress(to io.Writer, nDumped int) {
+	if nDumped == 0 {
 		return
 	}
-	percent := currentPosition * 100 / nElements
-	nBars := widgetSize * percent / 100
 
-	bars := strings.Repeat("=", nBars)
-	spaces := strings.Repeat(" ", widgetSize-nBars)
-	fmt.Fprintf(to, "\r[%s%s] %3d%% [%d/%d]", bars, spaces, int(percent), currentPosition, nElements)
-
-	if currentPosition == nElements {
-		fmt.Fprint(to, "\n")
-	}
+	fmt.Fprintf(to, "\r%d element dumped", nDumped)
 }
 
 func isFlagPassed(name string) bool {
@@ -45,6 +36,7 @@ func realMain() int {
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
 	db := flag.Int("db", 0, "only dump this database (default: all databases)")
+	filter := flag.String("filter", "*", "key filter to use")
 	nWorkers := flag.Int("n", 10, "Parallel workers")
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
@@ -76,12 +68,15 @@ func realMain() int {
 	defer func() {
 		close(progressNotifs)
 		wg.Wait()
+		if !(*silent) {
+			fmt.Fprint(os.Stderr, "\n")
+		}
 	}()
 
 	go func() {
 		for n := range progressNotifs {
 			if !(*silent) {
-				drawProgressBar(os.Stderr, n.Done, n.Total, 50)
+				drawProgress(os.Stderr, n.Done)
 			}
 		}
 		wg.Done()
@@ -89,14 +84,14 @@ func realMain() int {
 
 	logger := log.New(os.Stdout, "", 0)
 	if db == nil {
-		if err = redisdump.DumpServer(*host, *port, redisPassword, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
-			fmt.Println(err)
+		if err = redisdump.DumpServer(*host, *port, redisPassword, *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	} else {
 		url := redisdump.RedisURL(*host, fmt.Sprint(*port), fmt.Sprint(*db), redisPassword)
-		if err = redisdump.DumpDB(url, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
-			fmt.Println(err)
+		if err = redisdump.DumpDB(url, *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	}
