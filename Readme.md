@@ -23,6 +23,8 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 ```
 $ redis-dump-go -h
 Usage of ./redis-dump-go:
+  -db int
+        only dump this database (default: all databases)
   -host string
         Server host (default "127.0.0.1")
   -n int
