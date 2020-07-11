@@ -205,38 +205,6 @@ func getDBIndexes(redisURL string) ([]uint8, error) {
 	return parseKeyspaceInfo(keyspaceInfo)
 }
 
-func withDBSelection(dial radix.ConnFunc, db uint8) radix.ConnFunc {
-	return func(network, addr string) (radix.Conn, error) {
-		conn, err := dial(network, addr)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := conn.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
-			conn.Close()
-			return nil, err
-		}
-
-		return conn, nil
-	}
-}
-
-func withAuth(dial radix.ConnFunc, redisPassword string) radix.ConnFunc {
-	return func(network, addr string) (radix.Conn, error) {
-		conn, err := dial(network, addr)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := conn.Do(radix.Cmd(nil, "AUTH", fmt.Sprint(redisPassword))); err != nil {
-			conn.Close()
-			return nil, err
-		}
-
-		return conn, nil
-	}
-}
-
 func scanKeys(client radix.Client, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
 	keyBatchSize := 100
 	s := radix.NewScanner(client, radix.ScanOpts{Command: "SCAN", Count: keyBatchSize})
