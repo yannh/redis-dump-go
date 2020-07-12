@@ -35,7 +35,7 @@ Usage of ./bin/redis-dump-go:
         Output type - can be resp or commands (default "resp")
   -port int
         Server port (default 6379)
-  -s    Silent mode (disable progress bar)
+  -s    Silent mode (disable logging of progress / stats)
   -ttl
         Preserve Keys TTL (default true)
 $ ./bin/redis-dump-go > dump.resp

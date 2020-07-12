@@ -48,7 +48,6 @@ func isFlagPassed(name string) bool {
 func realMain() int {
 	var err error
 
-	// TODO: Number of workers & TTL as parameters
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
 	db := flag.Uint("db", 0, "only dump this database (default: all databases)")
@@ -56,7 +55,7 @@ func realMain() int {
 	nWorkers := flag.Int("n", 10, "Parallel workers")
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
-	silent := flag.Bool("s", false, "Silent mode (disable progress bar)")
+	silent := flag.Bool("s", false, "Silent mode (disable logging of progress / stats)")
 	flag.Parse()
 
 	if !isFlagPassed("db") {
