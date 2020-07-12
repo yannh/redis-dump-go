@@ -21,10 +21,12 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 ## Run
 
 ```
-$ redis-dump-go -h
-Usage of ./redis-dump-go:
-  -db int
+$ ./bin/redis-dump-go -h
+Usage of ./bin/redis-dump-go:
+  -db uint
         only dump this database (default: all databases)
+  -filter string
+        key filter to use (default "*")
   -host string
         Server host (default "127.0.0.1")
   -n int
@@ -34,8 +36,11 @@ Usage of ./redis-dump-go:
   -port int
         Server port (default 6379)
   -s    Silent mode (disable progress bar)
-$ redis-dump-go > redis-backup.resp
-[==================================================] 100% [5/5]
+  -ttl
+        Preserve Keys TTL (default true)
+$ ./bin/redis-dump-go > dump.resp
+Database 0: 9 element dumped
+Database 1: 1 element dumped
 ```
 
 For password-protected Redis servers, set the shell variable REDISDUMPGO_AUTH:
