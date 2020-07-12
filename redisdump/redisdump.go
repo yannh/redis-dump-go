@@ -12,13 +12,6 @@ import (
 	radix "github.com/mediocregopher/radix/v3"
 )
 
-func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}
-
 func ttlToRedisCmd(k string, val int64) []string {
 	return []string{"EXPIREAT", k, fmt.Sprint(time.Now().Unix() + val)}
 }
@@ -160,6 +153,7 @@ func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL boo
 // and can be used to provide a progress visualisation such as a progress bar.
 // Done is the number of items dumped, Total is the total number of items to dump.
 type ProgressNotification struct {
+	Db   uint8
 	Done int
 }
 
@@ -205,7 +199,7 @@ func getDBIndexes(redisURL string) ([]uint8, error) {
 	return parseKeyspaceInfo(keyspaceInfo)
 }
 
-func scanKeys(client radix.Client, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
+func scanKeys(client radix.Client, db uint8, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
 	keyBatchSize := 100
 	s := radix.NewScanner(client, radix.ScanOpts{Command: "SCAN", Pattern: filter, Count: keyBatchSize})
 
@@ -218,19 +212,31 @@ func scanKeys(client radix.Client, filter string, keyBatches chan<- []string, pr
 			nProcessed += len(keyBatch)
 			keyBatches <- keyBatch
 			keyBatch = nil
-			progressNotifications <- ProgressNotification{nProcessed}
+			progressNotifications <- ProgressNotification{Db: db, Done: nProcessed}
 		}
 	}
 
 	keyBatches <- keyBatch
 	nProcessed += len(keyBatch)
-	progressNotifications <- ProgressNotification{nProcessed}
+	progressNotifications <- ProgressNotification{Db: db, Done: nProcessed}
 
 	return s.Close()
 }
 
+// RedisURL builds a connect URL given a Host, port, db & password
+func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
+	switch {
+	case redisDB == "":
+		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
+	case redisDB != "":
+		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort) + "/" + redisDB
+	}
+
+	return ""
+}
+
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisURL string, filter string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	errors := make(chan error)
@@ -242,14 +248,12 @@ func DumpDB(redisURL string, filter string, nWorkers int, withTTL bool, logger *
 		}
 	}()
 
+	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
 	client, err := radix.NewPool("tcp", redisURL, nWorkers)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-
-	splitURL := strings.Split(redisURL, "/")
-	db := splitURL[len(splitURL)-1]
 
 	if err = client.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
 		return err
@@ -262,7 +266,7 @@ func DumpDB(redisURL string, filter string, nWorkers int, withTTL bool, logger *
 		go dumpKeysWorker(client, keyBatches, withTTL, logger, serializer, errors, done)
 	}
 
-	scanKeys(client, filter, keyBatches, progress)
+	scanKeys(client, db, filter, keyBatches, progress)
 	close(keyBatches)
 
 	for i := 0; i < nWorkers; i++ {
@@ -270,17 +274,6 @@ func DumpDB(redisURL string, filter string, nWorkers int, withTTL bool, logger *
 	}
 
 	return nil
-}
-
-func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
-	switch {
-	case redisDB == "":
-		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
-	case redisDB != "":
-		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort) + "/" + redisDB
-	}
-
-	return ""
 }
 
 // DumpServer dumps all Keys from the redis server given by redisURL,
@@ -294,8 +287,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, filter st
 	}
 
 	for _, db := range dbs {
-		url = RedisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
-		if err = DumpDB(url, filter, nWorkers, withTTL, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, logger, serializer, progress); err != nil {
 			return err
 		}
 	}

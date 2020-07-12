@@ -11,12 +11,28 @@ import (
 	"github.com/yannh/redis-dump-go/redisdump"
 )
 
-func drawProgress(to io.Writer, nDumped int) {
+type progressLogger struct {
+	stats map[uint8]int
+}
+
+func newProgressLogger() *progressLogger {
+	return &progressLogger{
+		stats: map[uint8]int{},
+	}
+}
+
+func (p *progressLogger) drawProgress(to io.Writer, db uint8, nDumped int) {
+	if _, ok := p.stats[db]; !ok && len(p.stats) > 0 {
+		// We switched database, write to a new line
+		fmt.Fprintf(to, "\n")
+	}
+
+	p.stats[db] = nDumped
 	if nDumped == 0 {
 		return
 	}
 
-	fmt.Fprintf(to, "\r%d element dumped", nDumped)
+	fmt.Fprintf(to, "\rDatabase %d: %d element dumped", db, nDumped)
 }
 
 func isFlagPassed(name string) bool {
@@ -35,7 +51,7 @@ func realMain() int {
 	// TODO: Number of workers & TTL as parameters
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 6379, "Server port")
-	db := flag.Int("db", 0, "only dump this database (default: all databases)")
+	db := flag.Uint("db", 0, "only dump this database (default: all databases)")
 	filter := flag.String("filter", "*", "key filter to use")
 	nWorkers := flag.Int("n", 10, "Parallel workers")
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
@@ -73,10 +89,11 @@ func realMain() int {
 		}
 	}()
 
+	pl := newProgressLogger()
 	go func() {
 		for n := range progressNotifs {
 			if !(*silent) {
-				drawProgress(os.Stderr, n.Done)
+				pl.drawProgress(os.Stderr, n.Db, n.Done)
 			}
 		}
 		wg.Done()
@@ -89,8 +106,7 @@ func realMain() int {
 			return 1
 		}
 	} else {
-		url := redisdump.RedisURL(*host, fmt.Sprint(*port), fmt.Sprint(*db), redisPassword)
-		if err = redisdump.DumpDB(url, *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
