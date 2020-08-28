@@ -12,6 +12,12 @@ import (
 	radix "github.com/mediocregopher/radix/v3"
 )
 
+var keysMode bool = false
+
+func SetKeysMode(on bool) {
+	keysMode = on
+}
+
 func ttlToRedisCmd(k string, val int64) []string {
 	return []string{"EXPIREAT", k, fmt.Sprint(time.Now().Unix() + val)}
 }
@@ -109,7 +115,6 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 				return err
 			}
 			redisCmd = hashToRedisCmd(key, val)
-
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
@@ -201,6 +206,23 @@ func getDBIndexes(redisURL string) ([]uint8, error) {
 
 func scanKeys(client radix.Client, db uint8, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
 	keyBatchSize := 100
+
+	err := client.Do(radix.Cmd(nil, "SELECT", strconv.Itoa(int(db))))
+	if err != nil {
+		return err
+	}
+
+	if keysMode {
+		var keys []string
+		err = client.Do(radix.Cmd(&keys, "keys", filter))
+		if err != nil {
+			return err
+		}
+		progressNotifications <- ProgressNotification{Db: db, Done: len(keys)}
+		keyBatches <- keys
+		return nil
+	}
+
 	s := radix.NewScanner(client, radix.ScanOpts{Command: "SCAN", Pattern: filter, Count: keyBatchSize})
 
 	nProcessed := 0

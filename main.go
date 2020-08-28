@@ -56,7 +56,14 @@ func realMain() int {
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
 	silent := flag.Bool("s", false, "Silent mode (disable logging of progress / stats)")
+	keysMode := flag.Bool("km", false, "Use KEYS command instead of SCAN, for redis version below 2.8.0 (default false)")
+
 	flag.Parse()
+
+	redisdump.SetKeysMode(*keysMode)
+
+	//fmt.Printf("host:%s port:%d db:%d filter:%s nWorkers:%d withTTL:%v output:%s silent:%v keysMode:%v\n",
+	//	*host, *port, *db, *filter, *nWorkers, *withTTL, *output, *silent, *keysMode)
 
 	if !isFlagPassed("db") {
 		db = nil

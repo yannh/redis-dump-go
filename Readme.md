@@ -29,6 +29,8 @@ Usage of ./bin/redis-dump-go:
         key filter to use (default "*")
   -host string
         Server host (default "127.0.0.1")
+  -km
+        Use KEYS command instead of SCAN, for redis version below 2.8.0 (default false)
   -n int
         Parallel workers (default 10)
   -output string
@@ -38,6 +40,8 @@ Usage of ./bin/redis-dump-go:
   -s    Silent mode (disable logging of progress / stats)
   -ttl
         Preserve Keys TTL (default true)
+
+
 $ ./bin/redis-dump-go > dump.resp
 Database 0: 9 element dumped
 Database 1: 1 element dumped
