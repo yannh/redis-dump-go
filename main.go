@@ -52,6 +52,7 @@ func realMain() int {
 	port := flag.Int("port", 6379, "Server port")
 	db := flag.Uint("db", 0, "only dump this database (default: all databases)")
 	filter := flag.String("filter", "*", "key filter to use")
+	noscan := flag.Bool("noscan", false, "use KEYS * instead of SCAN - for Redis <=2.8")
 	nWorkers := flag.Int("n", 10, "Parallel workers")
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
@@ -100,12 +101,12 @@ func realMain() int {
 
 	logger := log.New(os.Stdout, "", 0)
 	if db == nil {
-		if err = redisdump.DumpServer(*host, *port, redisPassword, *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpServer(*host, *port, redisPassword, *filter, *nWorkers, *withTTL, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	} else {
-		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), *filter, *nWorkers, *withTTL, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), *filter, *nWorkers, *withTTL, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
