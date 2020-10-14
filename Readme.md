@@ -31,6 +31,8 @@ Usage of ./bin/redis-dump-go:
         Server host (default "127.0.0.1")
   -n int
         Parallel workers (default 10)
+  -noscan
+        Use KEYS * instead of SCAN - for Redis <=2.8
   -output string
         Output type - can be resp or commands (default "resp")
   -port int
@@ -43,7 +45,7 @@ Database 0: 9 element dumped
 Database 1: 1 element dumped
 ```
 
-For password-protected Redis servers, set the shell variable REDISDUMPGO_AUTH:
+For password-protected Redis servers, set the shell variable REDISDUMPGO\_AUTH:
 
 ```
 $ export REDISDUMPGO_AUTH=myRedisPassword
