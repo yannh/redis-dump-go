@@ -223,6 +223,32 @@ func scanKeys(client radix.Client, db uint8, filter string, keyBatches chan<- []
 	return s.Close()
 }
 
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+func scanKeysLegacy(client radix.Client, db uint8, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
+	keyBatchSize := 100
+	var err error
+	var keys []string
+	if err = client.Do(radix.Cmd(&keys, "KEYS", filter)); err != nil {
+		return err
+	}
+
+	for i := 0; i < len(keys); i += keyBatchSize {
+		batchEnd := min(i+keyBatchSize, len(keys))
+		keyBatches <- keys[i:batchEnd]
+		if progressNotifications != nil {
+			progressNotifications <- ProgressNotification{db, i}
+		}
+	}
+
+	return nil
+}
+
 // RedisURL builds a connect URL given a Host, port, db & password
 func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
 	switch {
@@ -236,8 +262,13 @@ func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword 
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
+
+	keyGenerator := scanKeys
+	if noscan {
+		keyGenerator = scanKeysLegacy
+	}
 
 	errors := make(chan error)
 	nErrors := 0
@@ -266,7 +297,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 		go dumpKeysWorker(client, keyBatches, withTTL, logger, serializer, errors, done)
 	}
 
-	scanKeys(client, db, filter, keyBatches, progress)
+	keyGenerator(client, db, filter, keyBatches, progress)
 	close(keyBatches)
 
 	for i := 0; i < nWorkers; i++ {
@@ -279,7 +310,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	url := RedisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
 	dbs, err := getDBIndexes(url)
 	if err != nil {
@@ -287,7 +318,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, filter st
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
