@@ -262,7 +262,7 @@ func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword 
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, noselect bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	var err error
 
 	keyGenerator := scanKeys
@@ -289,7 +289,10 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 	if err = client.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
 		return err
 	}
-	logger.Printf(serializer([]string{"SELECT", fmt.Sprint(db)}))
+
+	if !noselect {
+		logger.Printf(serializer([]string{"SELECT", fmt.Sprint(db)}))
+	}
 
 	done := make(chan bool)
 	keyBatches := make(chan []string)
@@ -310,7 +313,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, noscan bool, noselect bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	url := RedisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
 	dbs, err := getDBIndexes(url)
 	if err != nil {
@@ -318,7 +321,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, filter st
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, noscan, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, noscan, noselect, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
