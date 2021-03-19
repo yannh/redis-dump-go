@@ -21,7 +21,7 @@ func stringToRedisCmd(k, val string) []string {
 }
 
 func hashToRedisCmd(k string, val map[string]string) []string {
-	cmd := []string{"HSET", k}
+	cmd := []string{"HMSET", k}
 	for k, v := range val {
 		cmd = append(cmd, k, v)
 	}
@@ -66,7 +66,12 @@ func RESPSerializer(cmd []string) string {
 
 // RedisCmdSerializer will serialize cmd to a string with redis commands
 func RedisCmdSerializer(cmd []string) string {
-	return strings.Join(cmd, " ")
+	buf := strings.Builder{}
+	buf.WriteString(cmd[0])
+	for i:=1;i< len(cmd);i++{
+		buf.WriteString(fmt.Sprintf(" \"%s\"",cmd[i]))
+	}
+	return buf.String()
 }
 
 func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer func([]string) string) error {

@@ -1,4 +1,4 @@
-module github.com/yannh/redis-dump-go
+module github.com/boolw/redis-dump-go
 
 go 1.12
 

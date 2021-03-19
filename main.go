@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yannh/redis-dump-go/redisdump"
+	"github.com/boolw/redis-dump-go/redisdump"
 )
 
 type progressLogger struct {
