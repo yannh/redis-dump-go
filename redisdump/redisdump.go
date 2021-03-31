@@ -69,19 +69,18 @@ func RedisCmdSerializer(cmd []string) string {
 	if len(cmd) == 0 {
 		return ""
 	}
-	res := ""
-	for i, s := range cmd {
-		if i>0 {
-			res += " "
-		}
-		if strings.Contains(s, " ") {
-			res += "\"" + s + "\""
+
+	buf := strings.Builder{}
+	buf.WriteString(fmt.Sprintf("%s", cmd[0]))
+	for i:=1;i< len(cmd);i++{
+		if strings.Contains(cmd[i], " ") {
+			buf.WriteString(fmt.Sprintf(" \"%s\"", cmd[i]))
 		} else {
-			res += s
+			buf.WriteString(fmt.Sprintf(" %s", cmd[i]))
 		}
 	}
 
-	return res
+	return buf.String()
 }
 
 func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer func([]string) string) error {
