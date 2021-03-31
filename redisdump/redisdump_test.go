@@ -73,7 +73,7 @@ func TestHashToRedisCmd(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny"}, expected: []string{"HSET", "Paris", "country", "France", "weather", "sunny"}},
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, expected: []string{"HSET", "Paris", "country", "France", "weather", "sunny", "poi", "Tour Eiffel"}},
 	}
 
 	for _, test := range testCases {
@@ -119,6 +119,26 @@ func TestRESPSerializer(t *testing.T) {
 
 	for _, test := range testCases {
 		s := RESPSerializer(test.command)
+		if s != test.expected {
+			t.Errorf("Failed serializing command to redis protocol: expected %s, got %s", test.expected, s)
+		}
+	}
+}
+
+
+func TestRedisCmdSerializer(t *testing.T) {
+	type testCase struct {
+		command  []string
+		expected string
+	}
+
+	testCases := []testCase{
+		{command: []string{"SET", "key name 1", "key value 1"}, expected: "SET \"key name 1\" \"key value 1\""},
+		{command: []string{"HSET", "key1", "key value 1"}, expected: "HSET key1 \"key value 1\""},
+	}
+
+	for _, test := range testCases {
+		s := RedisCmdSerializer(test.command)
 		if s != test.expected {
 			t.Errorf("Failed serializing command to redis protocol: expected %s, got %s", test.expected, s)
 		}

@@ -66,7 +66,22 @@ func RESPSerializer(cmd []string) string {
 
 // RedisCmdSerializer will serialize cmd to a string with redis commands
 func RedisCmdSerializer(cmd []string) string {
-	return strings.Join(cmd, " ")
+	if len(cmd) == 0 {
+		return ""
+	}
+	res := ""
+	for i, s := range cmd {
+		if i>0 {
+			res += " "
+		}
+		if strings.Contains(s, " ") {
+			res += "\"" + s + "\""
+		} else {
+			res += s
+		}
+	}
+
+	return res
 }
 
 func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer func([]string) string) error {
