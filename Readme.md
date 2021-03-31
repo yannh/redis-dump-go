@@ -18,6 +18,20 @@ Warning: like similar tools, Redis-dump-go does NOT provide Point-in-Time backup
 * Configurable Output (Redis commands, RESP)
 * Redis password-authentication
 
+## Installation
+
+Download the appropriate version for your operating system on [ŧhe release page](https://github.com/yannh/redis-dump-go/releases),
+or use the [Docker image](https://github.com/users/yannh/packages/container/package/redis-dump-go):
+
+```bash
+$ docker run ghcr.io/yannh/redis-dump-go:latest -h
+Usage of /redis-dump-go:
+[...]
+```
+_Bandwidth costs_: Redis-dump-go is hosted on on Github Container Registry which is currently in Beta. During that period,
+[bandwidth is free](https://docs.github.com/en/packages/guides/about-github-container-registry). After that period,
+a Github Account might be required / bandwidth costs might be applicable.
+
 ## Run
 
 ```
