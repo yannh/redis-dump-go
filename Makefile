@@ -2,6 +2,8 @@
 
 .PHONY: test build build-static docker-image docker-test docker-build-static
 
+RELEASE_VERSION ?= latest
+
 export GOFLAGS=-mod=vendor
 
 all: test build
