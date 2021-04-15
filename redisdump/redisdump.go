@@ -55,13 +55,12 @@ func zsetToRedisCmd(k string, val []string) []string {
 
 // RESPSerializer will serialize cmd to RESP
 func RESPSerializer(cmd []string) string {
-	s := ""
-	s += "*" + strconv.Itoa(len(cmd)) + "\r\n"
+	buf := strings.Builder{}
+	buf.WriteString("*" + strconv.Itoa(len(cmd)) + "\r\n")
 	for _, arg := range cmd {
-		s += "$" + strconv.Itoa(len(arg)) + "\r\n"
-		s += arg + "\r\n"
+		buf.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n" + arg + "\r\n")
 	}
-	return s
+	return buf.String()
 }
 
 // RedisCmdSerializer will serialize cmd to a string with redis commands
