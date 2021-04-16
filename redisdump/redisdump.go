@@ -293,7 +293,14 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 	}()
 
 	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
-	client, err := radix.NewPool("tcp", redisURL, nWorkers)
+
+	customConnFunc := func(network, addr string) (radix.Conn, error) {
+		return radix.Dial(network, addr,
+			radix.DialTimeout(5 * time.Minute),
+		)
+	}
+
+	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(customConnFunc))
 	if err != nil {
 		return err
 	}
