@@ -1,12 +1,19 @@
 builds:
-  - env:
-      - CGO_ENABLED=0
-      - GOFLAGS = -mod=vendor
-      - GO111MODULE = on
-    goos:
+  - goos:
       - windows
       - linux
       - darwin
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+    env:
+      - CGO_ENABLED=0
+      - GOFLAGS = -mod=vendor
+      - GO111MODULE = on
     flags:
       - -trimpath
       - -tags=netgo
