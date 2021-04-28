@@ -53,15 +53,7 @@ func zsetToRedisCmd(k string, val []string) []string {
 	return cmd
 }
 
-// RESPSerializer will serialize cmd to RESP
-func RESPSerializer(cmd []string) string {
-	buf := strings.Builder{}
-	buf.WriteString("*" + strconv.Itoa(len(cmd)) + "\r\n")
-	for _, arg := range cmd {
-		buf.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n" + arg + "\r\n")
-	}
-	return buf.String()
-}
+type Serializer func([]string) string
 
 // RedisCmdSerializer will serialize cmd to a string with redis commands
 func RedisCmdSerializer(cmd []string) string {
@@ -71,7 +63,7 @@ func RedisCmdSerializer(cmd []string) string {
 
 	buf := strings.Builder{}
 	buf.WriteString(fmt.Sprintf("%s", cmd[0]))
-	for i:=1;i< len(cmd);i++{
+	for i := 1; i < len(cmd); i++ {
 		if strings.Contains(cmd[i], " ") {
 			buf.WriteString(fmt.Sprintf(" \"%s\"", cmd[i]))
 		} else {
@@ -82,7 +74,17 @@ func RedisCmdSerializer(cmd []string) string {
 	return buf.String()
 }
 
-func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer func([]string) string) error {
+// RESPSerializer will serialize cmd to RESP
+func RESPSerializer(cmd []string) string {
+	buf := strings.Builder{}
+	buf.WriteString("*" + strconv.Itoa(len(cmd)) + "\r\n")
+	for _, arg := range cmd {
+		buf.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n" + arg + "\r\n")
+	}
+	return buf.String()
+}
+
+func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmd []string
 
@@ -153,7 +155,7 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, logger *log.Logger, serializer func([]string) string, errors chan<- error, done chan<- bool) {
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
 		if err := dumpKeys(client, keyBatch, withTTL, logger, serializer); err != nil {
 			errors <- err
@@ -275,7 +277,7 @@ func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword 
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	var err error
 
 	keyGenerator := scanKeys
@@ -296,7 +298,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 
 	customConnFunc := func(network, addr string) (radix.Conn, error) {
 		return radix.Dial(network, addr,
-			radix.DialTimeout(5 * time.Minute),
+			radix.DialTimeout(5*time.Minute),
 		)
 	}
 

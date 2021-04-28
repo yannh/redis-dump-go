@@ -12,6 +12,9 @@ test:
 	go test ./...
 	go vet ./...
 
+integration-test:
+	docker-compose run
+
 build:
 	go build -o bin/redis-dump-go
 

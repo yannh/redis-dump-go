@@ -7,13 +7,14 @@ services:
       - "6379:6379"
   redis-dump-go:
     image: "redis-dump-go:latest"
-    entrypoint: ["/redis-dump-go", "-host", "redis", "-port", "6379"]
+    entrypoint: ["/redis-dump-go", "-host", "redis", "-port", "6379", "-output", "commands"]
     depends_on:
-      - "redis"
+      - "setup"
   setup:
     image: "alpine:latest"
     volumes:
       - ./fixtures:/fixtures
+      - ./utils/data-generator/main.go:/generator.go
     depends_on:
       - "redis"
     entrypoint: ["/fixtures/setup-redis.sh"]

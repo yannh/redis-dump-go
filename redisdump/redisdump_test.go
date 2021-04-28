@@ -125,7 +125,6 @@ func TestRESPSerializer(t *testing.T) {
 	}
 }
 
-
 func TestRedisCmdSerializer(t *testing.T) {
 	type testCase struct {
 		command  []string
