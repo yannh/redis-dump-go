@@ -15,6 +15,7 @@ services:
     volumes:
       - ./fixtures:/fixtures
       - ./bin/generator:/generator
+      - ./bin/redis-dump-go:/redis-dump-go
     depends_on:
       - "redis"
     entrypoint: ["/fixtures/setup-redis.sh"]

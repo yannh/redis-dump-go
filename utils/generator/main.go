@@ -19,7 +19,7 @@ func randSeq(n int) string {
 }
 
 func GenerateData(w io.Writer, nKeys int) {
-	for i := 0; i <= nKeys; i++ {
+	for i := 0; i < nKeys; i++ {
 		io.WriteString(w, redisdump.RESPSerializer([]string{"SET", randSeq(8), randSeq(16)})+"\n")
 	}
 }
