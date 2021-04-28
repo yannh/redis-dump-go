@@ -25,7 +25,6 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
-    name_template: "{{ .ProjectName  }}-{{ .Os  }}-{{ .Arch  }}"
 checksum:
   name_template: 'CHECKSUMS'
 snapshot:
