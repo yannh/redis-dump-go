@@ -47,6 +47,8 @@ Usage of ./bin/redis-dump-go:
         Parallel workers (default 10)
   -noscan
         Use KEYS * instead of SCAN - for Redis <=2.8
+  -noselect
+        Do not print select statement in result dump (default: false)
   -output string
         Output type - can be resp or commands (default "resp")
   -port int
