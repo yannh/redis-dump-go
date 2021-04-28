@@ -10,7 +10,7 @@ echo "-> Filling Redis with Mock Data..."
 chmod a+x /generator
 
 redis-cli -h redis FLUSHDB
-/generator -n 10000 | redis-cli -h redis --pipe
+/generator -n 1000000 | redis-cli -h redis --pipe
 DBSIZE=`redis-cli -h redis dbsize`
 
 echo "-> Dumping DB..."
