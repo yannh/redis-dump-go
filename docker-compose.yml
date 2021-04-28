@@ -11,10 +11,10 @@ services:
     depends_on:
       - "setup"
   setup:
-    image: "alpine:latest"
+    image: "golang:1.16-alpine"
     volumes:
       - ./fixtures:/fixtures
-      - ./utils/data-generator/main.go:/generator.go
+      - ./bin/generator:/generator
     depends_on:
       - "redis"
     entrypoint: ["/fixtures/setup-redis.sh"]
