@@ -5,17 +5,12 @@ services:
     image: "redis:alpine"
     ports:
       - "6379:6379"
-  redis-dump-go:
-    image: "redis-dump-go:latest"
-    entrypoint: ["/redis-dump-go", "-host", "redis", "-port", "6379", "-output", "commands"]
-    depends_on:
-      - "setup"
   setup:
-    image: "golang:1.16-alpine"
+    image: "alpine:latest"
     volumes:
       - ./fixtures:/fixtures
       - ./bin/generator:/generator
       - ./bin/redis-dump-go:/redis-dump-go
     depends_on:
       - "redis"
-    entrypoint: ["/fixtures/setup-redis.sh"]
+    entrypoint: ["/fixtures/acceptance-tests.sh"]
