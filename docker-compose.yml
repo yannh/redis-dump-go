@@ -1,0 +1,19 @@
+version: "3.3"
+
+services:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+  redis-dump-go:
+    image: "redis-dump-go:latest"
+    entrypoint: ["/redis-dump-go", "-host", "redis", "-port", "6379"]
+    depends_on:
+      - "redis"
+  setup:
+    image: "alpine:latest"
+    volumes:
+      - ./fixtures:/fixtures
+    depends_on:
+      - "redis"
+    entrypoint: ["/fixtures/setup-redis.sh"]
