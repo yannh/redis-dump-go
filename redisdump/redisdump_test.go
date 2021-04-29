@@ -62,48 +62,113 @@ func TestStringToRedisCmd(t *testing.T) {
 			t.Errorf("Failed generating redis command from string for: %s %s", test.key, test.value)
 		}
 	}
-
 }
 
-func TestHashToRedisCmd(t *testing.T) {
+func TestHashToRedisCmds(t *testing.T) {
 	type testCase struct {
-		key      string
-		value    map[string]string
-		expected []string
+		key       string
+		value     map[string]string
+		cmdMaxLen int
+		expected  [][]string
 	}
 
 	testCases := []testCase{
-		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, expected: []string{"HSET", "Paris", "country", "France", "weather", "sunny", "poi", "Tour Eiffel"}},
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, cmdMaxLen: 1, expected: [][]string{{"HSET", "Paris", "country", "France"}, {"HSET", "Paris", "weather", "sunny"}, {"HSET", "Paris", "poi", "Tour Eiffel"}}},
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, cmdMaxLen: 2, expected: [][]string{{"HSET", "Paris", "country", "France", "weather", "sunny"}, {"HSET", "Paris", "poi", "Tour Eiffel"}}},
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, cmdMaxLen: 3, expected: [][]string{{"HSET", "Paris", "country", "France", "weather", "sunny", "poi", "Tour Eiffel"}}},
+		{key: "Paris", value: map[string]string{"country": "France", "weather": "sunny", "poi": "Tour Eiffel"}, cmdMaxLen: 4, expected: [][]string{{"HSET", "Paris", "country", "France", "weather", "sunny", "poi", "Tour Eiffel"}}},
 	}
 
 	for _, test := range testCases {
-		res := hashToRedisCmd(test.key, test.value)
-		for i := 2; i < len(test.expected); i = i + 2 {
-			if test.value[test.expected[i]] != test.expected[i+1] {
-				t.Errorf("Failed generating redis command from Hash for: %s %s, got %s", test.key, test.value, res)
+		res := hashToRedisCmds(test.key, test.value, test.cmdMaxLen)
+		for i := 0; i < len(res); i++ {
+			for j := 2; j < len(res[i]); j+=2 {
+				found := false
+				for k := 0; k<len(test.expected); k++ {
+					for l := 2; l < len(test.expected[k]); l+=2 {
+						if res[i][j] == test.expected[k][l] && res[i][j+1] == test.expected[k][l+1] {
+							found = true
+						}
+					}
+				}
+
+				if found == false {
+					t.Errorf("Failed generating redis command from Hash for: %s %s, got %s", test.key, test.value, res)
+				}
 			}
 		}
 	}
 }
 
-func TestZsetToRedisCmd(t *testing.T) {
+func TestSetToRedisCmds(t *testing.T) {
 	type testCase struct {
-		key      string
-		value    []string
-		expected []string
+		key       string
+		value     []string
+		cmdMaxLen int
+		expected  [][]string
 	}
 
 	testCases := []testCase{
-		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, expected: []string{"ZADD", "todo", "1", "task1", "2", "task2", "3", "task3"}},
+		{key: "myset", value: []string{"1", "2", "3"}, cmdMaxLen: 1, expected: [][]string{{"SADD", "myset", "1"}, {"SADD", "myset", "2"}, {"SADD", "myset", "3"}}},
+		{key: "myset", value: []string{"1", "2", "3"}, cmdMaxLen: 2, expected: [][]string{{"SADD", "myset", "1", "2"}, {"SADD", "myset", "3"}}},
+		{key: "myset", value: []string{"1", "2", "3"}, cmdMaxLen: 3, expected: [][]string{{"SADD", "myset", "1", "2", "3"}}},
+		{key: "myset", value: []string{"1", "2", "3"}, cmdMaxLen: 4, expected: [][]string{{"SADD", "myset", "1", "2", "3"}}},
+	}
+
+	for _, testCase := range testCases {
+		res := setToRedisCmds(testCase.key, testCase.value, testCase.cmdMaxLen)
+		if len(testCase.expected) != len(res) {
+			t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+		}
+
+		for i := 0; i<len(testCase.expected); i++ {
+			if len(testCase.expected[i]) != len(res[i]) {
+				t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+			}
+			for j := 0; j<len(testCase.expected[i]); j++ {
+				if res[i][j] != testCase.expected[i][j] {
+					t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+				}
+			}
+		}
+	}
+}
+
+
+func TestZsetToRedisCmds(t *testing.T) {
+	type testCase struct {
+		key       string
+		value     []string
+		cmdMaxLen int
+		expected  [][]string
+	}
+
+	testCases := []testCase{
+		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, cmdMaxLen: 1, expected: [][]string{{"ZADD", "todo", "1", "task1"}, {"ZADD", "todo", "2", "task2"}, {"ZADD", "todo", "3", "task3"}}},
+		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, cmdMaxLen: 2, expected: [][]string{{"ZADD", "todo", "1", "task1", "2", "task2"}, {"ZADD", "todo", "3", "task3"}}},
+		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, cmdMaxLen: 3, expected: [][]string{{"ZADD", "todo", "1", "task1", "2", "task2", "3", "task3"}}},
+		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, cmdMaxLen: 4, expected: [][]string{{"ZADD", "todo", "1", "task1", "2", "task2", "3", "task3"}}},
 	}
 
 	for _, test := range testCases {
-		res := zsetToRedisCmd(test.key, test.value)
-		if !testEqString(res, test.expected) {
-			t.Errorf("Failed generating redis command from Hash for: %s %s, got %v", test.key, test.value, res)
+		res := zsetToRedisCmds(test.key, test.value, 1)
+		for i := 0; i < len(res); i++ {
+			for j := 2; j < len(res[i]); j+=2 {
+				found := false
+				for k := 0; k<len(test.expected); k++ {
+					for l := 2; l < len(test.expected[k]); l+=2 {
+						if res[i][j] == test.expected[k][l] && res[i][j+1] == test.expected[k][l+1] {
+							found = true
+						}
+					}
+				}
+
+				if found == false {
+					t.Errorf("Failed generating redis command from Hash for: %s %s, got %s", test.key, test.value, res)
+				}
+			}
 		}
 	}
-
 }
 
 func TestRESPSerializer(t *testing.T) {

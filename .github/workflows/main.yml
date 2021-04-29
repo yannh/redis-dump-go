@@ -13,6 +13,12 @@ jobs:
       - name: build
         run: make docker-build-static
 
+      - name: build-generator
+        run: make docker-build-generator-static
+
+      - name: integration-tests
+        run: make integration-tests
+
       - name: build-image
         run: make docker-image
 

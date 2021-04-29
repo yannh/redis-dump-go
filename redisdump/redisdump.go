@@ -20,37 +20,96 @@ func stringToRedisCmd(k, val string) []string {
 	return []string{"SET", k, val}
 }
 
-func hashToRedisCmd(k string, val map[string]string) []string {
-	cmd := []string{"HSET", k}
+func hashToRedisCmds(hashKey string, val map[string]string, cmdMaxLen int) [][]string {
+	cmds := [][]string{}
+
+	cmd := []string{"HSET", hashKey}
+	n:=0
 	for k, v := range val {
+		if n >= cmdMaxLen {
+			n = 0
+			cmds = append(cmds, cmd)
+			cmd = []string{"HSET", hashKey}
+		}
 		cmd = append(cmd, k, v)
+		n++
 	}
-	return cmd
+
+	if n>0 {
+		cmds = append(cmds, cmd)
+	}
+
+	return cmds
 }
 
-func setToRedisCmd(k string, val []string) []string {
-	cmd := []string{"SADD", k}
-	return append(cmd, val...)
+func setToRedisCmds(setKey string, val []string, cmdMaxLen int) [][]string {
+	cmds := [][]string{}
+	cmd := []string{"SADD", setKey}
+	n :=0
+	for _, v := range val {
+		if n>=cmdMaxLen {
+			n = 0
+			cmds = append(cmds, cmd)
+			cmd = []string{"SADD", setKey}
+		}
+		cmd = append(cmd, v)
+		n++
+	}
+
+	if n>0 {
+		cmds = append(cmds, cmd)
+	}
+
+	return cmds
 }
 
-func listToRedisCmd(k string, val []string) []string {
-	cmd := []string{"RPUSH", k}
-	return append(cmd, val...)
+func listToRedisCmds(listKey string, val []string, cmdMaxLen int) [][]string {
+	cmds := [][]string{}
+	cmd := []string{"RPUSH", listKey}
+	n :=0
+	for _, v := range val {
+		if n>=cmdMaxLen {
+			n = 0
+			cmds = append(cmds, cmd)
+			cmd = []string{"RPUSH", listKey}
+		}
+		cmd = append(cmd, v)
+		n++
+	}
+
+	if n>0 {
+		cmds = append(cmds, cmd)
+	}
+
+	return cmds
 }
 
-func zsetToRedisCmd(k string, val []string) []string {
-	cmd := []string{"ZADD", k}
+// We break down large ZSETs to multiple ZADD commands
+
+func zsetToRedisCmds(zsetKey string, val []string, cmdMaxLen int) [][]string {
+	cmds := [][]string{}
 	var key string
 
+	cmd := []string{"ZADD", zsetKey}
+	n := 0
 	for i, v := range val {
 		if i%2 == 0 {
 			key = v
 			continue
 		}
 
+		if n >= cmdMaxLen {
+			n = 0
+			cmds = append(cmds, cmd)
+			cmd = []string{"ZADD", zsetKey}
+		}
 		cmd = append(cmd, v, key)
+		n++
 	}
-	return cmd
+	if n>0 {
+		cmds = append(cmds, cmd)
+	}
+	return cmds
 }
 
 type Serializer func([]string) string
@@ -86,7 +145,7 @@ func RESPSerializer(cmd []string) string {
 
 func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer Serializer) error {
 	var err error
-	var redisCmd []string
+	var redisCmds [][]string
 
 	for _, key := range keys {
 		var keyType string
@@ -102,35 +161,35 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			if err = client.Do(radix.Cmd(&val, "GET", key)); err != nil {
 				return err
 			}
-			redisCmd = stringToRedisCmd(key, val)
+			redisCmds = [][]string{stringToRedisCmd(key, val)}
 
 		case "list":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmd = listToRedisCmd(key, val)
+			redisCmds = listToRedisCmd(key, val, 1000)
 
 		case "set":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
-			redisCmd = setToRedisCmd(key, val)
+			redisCmds = setToRedisCmd(key, val, 1000)
 
 		case "hash":
 			var val map[string]string
 			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
-			redisCmd = hashToRedisCmd(key, val)
+			redisCmds = hashToRedisCmd(key, val, 1000)
 
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmd = zsetToRedisCmd(key, val)
+			redisCmds = zsetToRedisCmd(key, val, 1000)
 
 		case "none":
 
@@ -138,7 +197,9 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			return fmt.Errorf("Key %s is of unreconized type %s", key, keyType)
 		}
 
-		logger.Print(serializer(redisCmd))
+		for _, redisCmd := range redisCmds {
+			logger.Print(serializer(redisCmd))
+		}
 
 		if withTTL {
 			var ttl int64
@@ -146,8 +207,8 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 				return err
 			}
 			if ttl > 0 {
-				redisCmd = ttlToRedisCmd(key, ttl)
-				logger.Print(serializer(redisCmd))
+				cmd := ttlToRedisCmd(key, ttl)
+				logger.Print(serializer(cmd))
 			}
 		}
 	}

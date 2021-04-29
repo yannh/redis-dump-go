@@ -5,7 +5,7 @@ services:
     image: "redis:alpine"
     ports:
       - "6379:6379"
-  setup:
+  tests:
     image: "alpine:latest"
     volumes:
       - ./fixtures:/fixtures

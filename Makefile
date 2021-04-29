@@ -45,3 +45,6 @@ docker-build-generator-static:
 
 release:
 	docker run -e GITHUB_TOKEN -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v0.164.0-amd64 --rm-dist
+
+integration-tests:
+	docker-compose run tests
