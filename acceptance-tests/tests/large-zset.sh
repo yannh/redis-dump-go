@@ -3,7 +3,8 @@
 echo "-> Filling Redis with Mock Data..."
 redis-cli -h redis FLUSHDB
 /generator -output resp -type zset -n 1000000 | redis-cli -h redis --pipe
-DBSIZE=`redis-cli -h redis dbsize`
+KEYNAME=`redis-cli -h redis KEYS '*'`
+COUNT=`redis-cli -h redis ZCOUNT $KEYNAME -inf +inf`
 
 echo "-> Dumping DB..."
 /redis-dump-go -host redis -output resp >backup
@@ -11,14 +12,14 @@ echo "-> Dumping DB..."
 echo "-> Flushing DB and restoring dump..."
 redis-cli -h redis FLUSHDB
 redis-cli -h redis --pipe <backup
-NEWDBSIZE=`redis-cli -h redis dbsize`
-echo "Redis has $DBSIZE entries"
+NEWCOUNT=`redis-cli -h redis ZCOUNT $KEYNAME -inf +inf`
+echo "Redis has $COUNT entries"
 
-echo "-> Comparing DB sizes..."
-if [ $DBSIZE -ne $NEWDBSIZE ]; then
-  echo "ERROR - restored DB has $NEWDBSIZE elements, expected $DBSIZE"
+echo "-> Comparing ZSET sizes..."
+if [ $COUNT -ne $NEWCOUNT ]; then
+  echo "ERROR - restored ZSET $KEYNAME has $NEWCOUNT elements, expected $COUNT"
   exit 1
 else
-  echo "OK - $NEWDBSIZE elements"
+  echo "OK - ZSET $KEYNAME has $NEWCOUNT elements"
   exit 0
 fi
