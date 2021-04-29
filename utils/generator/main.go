@@ -49,7 +49,7 @@ func main() {
 		s = redisdump.RedisCmdSerializer
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unrecognised type %s, should be strings or zset", sType)
+		fmt.Fprintf(os.Stderr, "Unrecognised type %s, should be strings or zset", *sType)
 		os.Exit(1)
 	}
 
@@ -61,7 +61,7 @@ func main() {
 		GenerateStrings(os.Stdout, *nKeys, s)
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unrecognised type %s, should be strings or zset", sType)
+		fmt.Fprintf(os.Stderr, "Unrecognised type %s, should be strings or zset", *sType)
 		os.Exit(1)
 	}
 }
