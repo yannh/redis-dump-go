@@ -24,7 +24,7 @@ func hashToRedisCmds(hashKey string, val map[string]string, batchSize int) [][]s
 	cmds := [][]string{}
 
 	cmd := []string{"HSET", hashKey}
-	n:=0
+	n := 0
 	for k, v := range val {
 		if n >= batchSize {
 			n = 0
@@ -35,7 +35,7 @@ func hashToRedisCmds(hashKey string, val map[string]string, batchSize int) [][]s
 		n++
 	}
 
-	if n>0 {
+	if n > 0 {
 		cmds = append(cmds, cmd)
 	}
 
@@ -45,9 +45,9 @@ func hashToRedisCmds(hashKey string, val map[string]string, batchSize int) [][]s
 func setToRedisCmds(setKey string, val []string, batchSize int) [][]string {
 	cmds := [][]string{}
 	cmd := []string{"SADD", setKey}
-	n :=0
+	n := 0
 	for _, v := range val {
-		if n>=batchSize {
+		if n >= batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"SADD", setKey}
@@ -56,7 +56,7 @@ func setToRedisCmds(setKey string, val []string, batchSize int) [][]string {
 		n++
 	}
 
-	if n>0 {
+	if n > 0 {
 		cmds = append(cmds, cmd)
 	}
 
@@ -66,9 +66,9 @@ func setToRedisCmds(setKey string, val []string, batchSize int) [][]string {
 func listToRedisCmds(listKey string, val []string, batchSize int) [][]string {
 	cmds := [][]string{}
 	cmd := []string{"RPUSH", listKey}
-	n :=0
+	n := 0
 	for _, v := range val {
-		if n>=batchSize {
+		if n >= batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"RPUSH", listKey}
@@ -77,7 +77,7 @@ func listToRedisCmds(listKey string, val []string, batchSize int) [][]string {
 		n++
 	}
 
-	if n>0 {
+	if n > 0 {
 		cmds = append(cmds, cmd)
 	}
 
@@ -107,7 +107,7 @@ func zsetToRedisCmds(zsetKey string, val []string, batchSize int) [][]string {
 		n++
 	}
 
-	if n>0 {
+	if n > 0 {
 		cmds = append(cmds, cmd)
 	}
 

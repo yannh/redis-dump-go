@@ -82,10 +82,10 @@ func TestHashToRedisCmds(t *testing.T) {
 	for _, test := range testCases {
 		res := hashToRedisCmds(test.key, test.value, test.cmdMaxLen)
 		for i := 0; i < len(res); i++ {
-			for j := 2; j < len(res[i]); j+=2 {
+			for j := 2; j < len(res[i]); j += 2 {
 				found := false
-				for k := 0; k<len(test.expected); k++ {
-					for l := 2; l < len(test.expected[k]); l+=2 {
+				for k := 0; k < len(test.expected); k++ {
+					for l := 2; l < len(test.expected[k]); l += 2 {
 						if res[i][j] == test.expected[k][l] && res[i][j+1] == test.expected[k][l+1] {
 							found = true
 						}
@@ -122,12 +122,12 @@ func TestSetToRedisCmds(t *testing.T) {
 			continue
 		}
 
-		for i := 0; i<len(testCase.expected); i++ {
+		for i := 0; i < len(testCase.expected); i++ {
 			if len(testCase.expected[i]) != len(res[i]) {
 				t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
 				continue
 			}
-			for j := 0; j<len(testCase.expected[i]); j++ {
+			for j := 0; j < len(testCase.expected[i]); j++ {
 				if res[i][j] != testCase.expected[i][j] {
 					t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
 				}
@@ -135,7 +135,6 @@ func TestSetToRedisCmds(t *testing.T) {
 		}
 	}
 }
-
 
 func TestZsetToRedisCmds(t *testing.T) {
 	type testCase struct {
@@ -163,7 +162,7 @@ func TestZsetToRedisCmds(t *testing.T) {
 				t.Errorf("Failed generating redis command from ZSET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
 				continue
 			}
-			for j := 2; j < len(res[i]); j+=2 {
+			for j := 2; j < len(res[i]); j += 2 {
 				found := false
 				if res[i][j] == testCase.expected[i][j] && res[i][j+1] == testCase.expected[i][j+1] {
 					found = true
