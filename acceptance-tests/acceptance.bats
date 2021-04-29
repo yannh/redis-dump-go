@@ -6,6 +6,6 @@
 }
 
 @test "Pass when importing 1M key/values" {
-  run tests/1mkeys.sh
+  run tests/10kkeys.sh
   [ "$status" -eq 0 ]
 }
