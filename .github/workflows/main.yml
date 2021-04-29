@@ -16,8 +16,8 @@ jobs:
       - name: build-generator
         run: make docker-build-generator-static
 
-      - name: integration-tests
-        run: make integration-tests
+      - name: acceptance-tests
+        run: make acceptance-tests
 
       - name: build-image
         run: make docker-image
