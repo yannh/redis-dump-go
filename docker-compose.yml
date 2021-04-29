@@ -8,9 +8,10 @@ services:
   tests:
     image: "alpine:latest"
     volumes:
-      - ./fixtures:/fixtures
+      - ./acceptance-tests:/acceptance-tests
       - ./bin/generator:/generator
       - ./bin/redis-dump-go:/redis-dump-go
     depends_on:
       - "redis"
-    entrypoint: ["/fixtures/acceptance-tests.sh"]
+    working_dir: /acceptance-tests
+    entrypoint: ["/acceptance-tests/entrypoint.sh"]

@@ -119,11 +119,13 @@ func TestSetToRedisCmds(t *testing.T) {
 		res := setToRedisCmds(testCase.key, testCase.value, testCase.cmdMaxLen)
 		if len(testCase.expected) != len(res) {
 			t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+			continue
 		}
 
 		for i := 0; i<len(testCase.expected); i++ {
 			if len(testCase.expected[i]) != len(res[i]) {
 				t.Errorf("Failed generating redis command from SET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+				continue
 			}
 			for j := 0; j<len(testCase.expected[i]); j++ {
 				if res[i][j] != testCase.expected[i][j] {
@@ -150,21 +152,25 @@ func TestZsetToRedisCmds(t *testing.T) {
 		{key: "todo", value: []string{"task1", "1", "task2", "2", "task3", "3"}, cmdMaxLen: 4, expected: [][]string{{"ZADD", "todo", "1", "task1", "2", "task2", "3", "task3"}}},
 	}
 
-	for _, test := range testCases {
-		res := zsetToRedisCmds(test.key, test.value, 1)
+	for _, testCase := range testCases {
+		res := zsetToRedisCmds(testCase.key, testCase.value, testCase.cmdMaxLen)
+		if len(testCase.expected) != len(res) {
+			t.Errorf("Failed generating redis command from ZSET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+			continue
+		}
 		for i := 0; i < len(res); i++ {
+			if len(testCase.expected[i]) != len(res[i]) {
+				t.Errorf("Failed generating redis command from ZSET for %s %s %d: got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
+				continue
+			}
 			for j := 2; j < len(res[i]); j+=2 {
 				found := false
-				for k := 0; k<len(test.expected); k++ {
-					for l := 2; l < len(test.expected[k]); l+=2 {
-						if res[i][j] == test.expected[k][l] && res[i][j+1] == test.expected[k][l+1] {
-							found = true
-						}
-					}
+				if res[i][j] == testCase.expected[i][j] && res[i][j+1] == testCase.expected[i][j+1] {
+					found = true
 				}
 
 				if found == false {
-					t.Errorf("Failed generating redis command from Hash for: %s %s, got %s", test.key, test.value, res)
+					t.Errorf("Failed generating redis command from ZSet for: %s %s %d, got %s", testCase.key, testCase.value, testCase.cmdMaxLen, res)
 				}
 			}
 		}

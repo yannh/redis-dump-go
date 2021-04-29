@@ -20,13 +20,13 @@ func stringToRedisCmd(k, val string) []string {
 	return []string{"SET", k, val}
 }
 
-func hashToRedisCmds(hashKey string, val map[string]string, cmdMaxLen int) [][]string {
+func hashToRedisCmds(hashKey string, val map[string]string, batchSize int) [][]string {
 	cmds := [][]string{}
 
 	cmd := []string{"HSET", hashKey}
 	n:=0
 	for k, v := range val {
-		if n >= cmdMaxLen {
+		if n >= batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"HSET", hashKey}
@@ -42,12 +42,12 @@ func hashToRedisCmds(hashKey string, val map[string]string, cmdMaxLen int) [][]s
 	return cmds
 }
 
-func setToRedisCmds(setKey string, val []string, cmdMaxLen int) [][]string {
+func setToRedisCmds(setKey string, val []string, batchSize int) [][]string {
 	cmds := [][]string{}
 	cmd := []string{"SADD", setKey}
 	n :=0
 	for _, v := range val {
-		if n>=cmdMaxLen {
+		if n>=batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"SADD", setKey}
@@ -63,12 +63,12 @@ func setToRedisCmds(setKey string, val []string, cmdMaxLen int) [][]string {
 	return cmds
 }
 
-func listToRedisCmds(listKey string, val []string, cmdMaxLen int) [][]string {
+func listToRedisCmds(listKey string, val []string, batchSize int) [][]string {
 	cmds := [][]string{}
 	cmd := []string{"RPUSH", listKey}
 	n :=0
 	for _, v := range val {
-		if n>=cmdMaxLen {
+		if n>=batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"RPUSH", listKey}
@@ -86,7 +86,7 @@ func listToRedisCmds(listKey string, val []string, cmdMaxLen int) [][]string {
 
 // We break down large ZSETs to multiple ZADD commands
 
-func zsetToRedisCmds(zsetKey string, val []string, cmdMaxLen int) [][]string {
+func zsetToRedisCmds(zsetKey string, val []string, batchSize int) [][]string {
 	cmds := [][]string{}
 	var key string
 
@@ -98,7 +98,7 @@ func zsetToRedisCmds(zsetKey string, val []string, cmdMaxLen int) [][]string {
 			continue
 		}
 
-		if n >= cmdMaxLen {
+		if n >= batchSize {
 			n = 0
 			cmds = append(cmds, cmd)
 			cmd = []string{"ZADD", zsetKey}
@@ -106,9 +106,11 @@ func zsetToRedisCmds(zsetKey string, val []string, cmdMaxLen int) [][]string {
 		cmd = append(cmd, v, key)
 		n++
 	}
+
 	if n>0 {
 		cmds = append(cmds, cmd)
 	}
+
 	return cmds
 }
 
@@ -338,7 +340,7 @@ func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword 
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	var err error
 
 	keyGenerator := scanKeys
@@ -393,7 +395,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	url := RedisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
 	dbs, err := getDBIndexes(url)
 	if err != nil {
@@ -401,7 +403,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, filter st
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, noscan, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
