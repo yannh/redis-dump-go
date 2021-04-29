@@ -8,4 +8,4 @@ timeout 30 sh -c 'until redis-cli -h redis -p 6379 PING >/dev/null; do sleep 1; 
 
 chmod a+x /generator
 
-bats -p acceptance.bats
+bats --tap -p acceptance.bats
