@@ -168,28 +168,28 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmds = listToRedisCmd(key, val, 1000)
+			redisCmds = listToRedisCmds(key, val, 1000)
 
 		case "set":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
-			redisCmds = setToRedisCmd(key, val, 1000)
+			redisCmds = setToRedisCmds(key, val, 1000)
 
 		case "hash":
 			var val map[string]string
 			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
-			redisCmds = hashToRedisCmd(key, val, 1000)
+			redisCmds = hashToRedisCmds(key, val, 1000)
 
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmds = zsetToRedisCmd(key, val, 1000)
+			redisCmds = zsetToRedisCmds(key, val, 1000)
 
 		case "none":
 
