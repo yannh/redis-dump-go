@@ -2,11 +2,11 @@
 
 echo "-> Filling Redis with Mock Data..."
 redis-cli -h redis FLUSHDB
-/generator -output resp -type strings -n 10000 | redis-cli -h redis --pipe
+/generator -output resp -type strings -n 1000000 | redis-cli -h redis --pipe
 DBSIZE=`redis-cli -h redis dbsize`
 
 echo "-> Dumping DB..."
-/redis-dump-go -host redis -output resp >backup
+time /redis-dump-go -host redis -n 250 -output resp >backup
 
 echo "-> Flushing DB and restoring dump..."
 redis-cli -h redis FLUSHDB
