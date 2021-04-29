@@ -37,10 +37,12 @@ a Github Account might be required / bandwidth costs might be applicable.
 ```
 $ ./bin/redis-dump-go -h
 Usage of ./bin/redis-dump-go:
+  -batchSize int
+        HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time (default 1000)
   -db uint
         only dump this database (default: all databases)
   -filter string
-        key filter to use (default "*")
+        Key filter to use (default "*")
   -host string
         Server host (default "127.0.0.1")
   -n int
@@ -54,6 +56,7 @@ Usage of ./bin/redis-dump-go:
   -s    Silent mode (disable logging of progress / stats)
   -ttl
         Preserve Keys TTL (default true)
+
 $ ./bin/redis-dump-go > dump.resp
 Database 0: 9 element dumped
 Database 1: 1 element dumped

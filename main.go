@@ -53,7 +53,7 @@ func realMain() int {
 	db := flag.Uint("db", 0, "only dump this database (default: all databases)")
 	filter := flag.String("filter", "*", "Key filter to use")
 	noscan := flag.Bool("noscan", false, "Use KEYS * instead of SCAN - for Redis <=2.8")
-	batchSize := flag.Int("batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'bathSize' items at a time")
+	batchSize := flag.Int("batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time")
 	nWorkers := flag.Int("n", 10, "Parallel workers")
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
