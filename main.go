@@ -63,6 +63,7 @@ func realMain() int {
 	if !isFlagPassed("db") {
 		db = nil
 	}
+	redisdump.BatchSize = *batchSize
 
 	var serializer func([]string) string
 	switch *output {

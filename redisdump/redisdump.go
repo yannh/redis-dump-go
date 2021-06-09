@@ -145,6 +145,8 @@ func RESPSerializer(cmd []string) string {
 	return buf.String()
 }
 
+var BatchSize = 1000
+
 func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmds [][]string
@@ -170,28 +172,28 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmds = listToRedisCmds(key, val, 1000)
+			redisCmds = listToRedisCmds(key, val, BatchSize)
 
 		case "set":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
-			redisCmds = setToRedisCmds(key, val, 1000)
+			redisCmds = setToRedisCmds(key, val, BatchSize)
 
 		case "hash":
 			var val map[string]string
 			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
-			redisCmds = hashToRedisCmds(key, val, 1000)
+			redisCmds = hashToRedisCmds(key, val, BatchSize)
 
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmds = zsetToRedisCmds(key, val, 1000)
+			redisCmds = zsetToRedisCmds(key, val, BatchSize)
 
 		case "none":
 

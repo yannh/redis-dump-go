@@ -4,6 +4,8 @@
 
 RELEASE_VERSION ?= latest
 
+LDFLAGS := "-s -w -X main.Version=$(Version) -X main.GitCommit=$(GitCommit)"
+
 export GOFLAGS=-mod=vendor
 
 all: test build
@@ -13,13 +15,13 @@ test:
 	go vet ./...
 
 build:
-	go build -o bin/redis-dump-go
+	go build -ldflags $(LDFLAGS) -o bin/redis-dump-go
 
 build-static:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o bin/redis-dump-go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -ldflags $(LDFLAGS) -o bin/redis-dump-go
 
 build-generator-static:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o bin/generator ./utils/generator/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -ldflags $(LDFLAGS)  -o bin/generator ./utils/generator/main.go
 
 docker-image:
 	docker build -t redis-dump-go:${RELEASE_VERSION} .
