@@ -145,7 +145,7 @@ func RESPSerializer(cmd []string) string {
 	return buf.String()
 }
 
-func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logger, serializer Serializer) error {
+func dumpKeys(client radix.Client, keys []string, withTTL bool, batchsize int, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmds [][]string
 
@@ -170,28 +170,28 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmds = listToRedisCmds(key, val, 1000)
+			redisCmds = listToRedisCmds(key, val, batchsize)
 
 		case "set":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
-			redisCmds = setToRedisCmds(key, val, 1000)
+			redisCmds = setToRedisCmds(key, val, batchsize)
 
 		case "hash":
 			var val map[string]string
 			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
-			redisCmds = hashToRedisCmds(key, val, 1000)
+			redisCmds = hashToRedisCmds(key, val, batchsize)
 
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmds = zsetToRedisCmds(key, val, 1000)
+			redisCmds = zsetToRedisCmds(key, val, batchsize)
 
 		case "none":
 
@@ -218,9 +218,9 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, logger *log.Logg
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
-		if err := dumpKeys(client, keyBatch, withTTL, logger, serializer); err != nil {
+		if err := dumpKeys(client, keyBatch, withTTL, batchSize, logger, serializer); err != nil {
 			errors <- err
 		}
 	}
@@ -379,7 +379,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
-		go dumpKeysWorker(client, keyBatches, withTTL, logger, serializer, errors, done)
+		go dumpKeysWorker(client, keyBatches, withTTL, batchSize, logger, serializer, errors, done)
 	}
 
 	keyGenerator(client, db, filter, keyBatches, progress)
