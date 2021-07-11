@@ -1,5 +1,93 @@
 Changelog from v3.0.1 and up. Prior changes don't have a changelog.
 
+# v3.7.0
+
+**New**
+
+* Add `FallbackToUndelivered` option to `StreamReaderOpts`. (PR #244)
+
+* Add `ClusterOnInitAllowUnavailable`. (PR #247)
+
+**Fixes and Improvements**
+
+* Fix reading a RESP error into a `*interface{}` panicking. (PR #240)
+
+# v3.6.0
+
+**New**
+
+* Add `Tuple` type, which makes unmarshaling `EXEC` and `EVAL` results easier.
+
+* Add `PersistentPubSubErrCh`, so that asynchronous errors within
+  `PersistentPubSub` can be exposed to the user.
+
+* Add `FlatCmd` method to `EvalScript`.
+
+* Add `StreamEntries` unmarshaler to make unmarshaling `XREAD` and `XREADGROUP`
+  results easier.
+
+**Fixes and Improvements**
+
+* Fix wrapped errors not being handled correctly by `Cluster`. (PR #229)
+
+* Fix `PersistentPubSub` deadlocking when a method was called after `Close`.
+  (PR #230)
+
+* Fix `StreamReader` not correctly handling the case of reading from multiple
+  streams when one is empty. (PR #224)
+
+# v3.5.2
+
+* Improve docs for `WithConn` and `PubSubConn`.
+
+* Fix `PubSubConn`'s `Subscribe` and `PSubscribe` methods potentially mutating
+  the passed in array of strings. (Issue #217)
+
+* Fix `StreamEntry` not properly handling unmarshaling an entry with a nil
+  fields array. (PR #218)
+
+# v3.5.1
+
+* Add `EmptyArray` field to `MaybeNil`. (PR #211)
+
+* Fix `Cluster` not properly re-initializing itself when the cluster goes
+  completely down. (PR #209)
+
+# v3.5.0
+
+Huge thank you to @nussjustin for all the work he's been doing on this project,
+this release is almost entirely his doing.
+
+**New**
+
+* Add support for `TYPE` option to `Scanner`. (PR #187)
+
+* Add `Sentinel.DoSecondary` method. (PR #197)
+
+* Add `DialAuthUser`, to support username+password authentication. (PR #195)
+
+* Add `Cluster.DoSecondary` method. (PR #198)
+
+**Fixes and Improvements**
+
+* Fix pipeline behavior when a decode error is encountered. (PR #180)
+
+* Fix `Reason` in `PoolConnClosed` in the case of the Pool being full. (PR #186)
+
+* Refactor `PersistentPubSub` to be cleaner, fixing a panic in the process.
+  (PR #185, Issue #184)
+
+* Fix marshaling of nil pointers in structs. (PR #192)
+
+* Wrap errors which get returned from pipeline decoding. (PR #191)
+
+* Simplify and improve pipeline error handling. (PR #190)
+
+* Dodge a `[]byte` allocation when in `StreamReader.Next`. (PR #196)
+
+* Remove excess lock in Pool. (PR #202)
+
+
 # v3.4.2
 
 * Fix alignment for atomic values in structs (PR #171)

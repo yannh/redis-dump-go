@@ -57,10 +57,11 @@ type ClusterCanRetryAction interface {
 ////////////////////////////////////////////////////////////////////////////////
 
 type clusterOpts struct {
-	pf              ClientFunc
-	clusterDownWait time.Duration
-	syncEvery       time.Duration
-	ct              trace.ClusterTrace
+	pf                   ClientFunc
+	clusterDownWait      time.Duration
+	syncEvery            time.Duration
+	ct                   trace.ClusterTrace
+	initAllowUnavailable bool
 }
 
 // ClusterOpt is an optional behavior which can be applied to the NewCluster
@@ -69,6 +70,11 @@ type ClusterOpt func(*clusterOpts)
 
 // ClusterPoolFunc tells the Cluster to use the given ClientFunc when creating
 // pools of connections to cluster members.
+//
+// This can be used to allow for secondary reads via the Cluster.DoSecondary
+// method by specifying a ClientFunc that internally creates connections using
+// DefaultClusterConnFunc or a custom ConnFunc that enables READONLY mode on each
+// connection.
 func ClusterPoolFunc(pf ClientFunc) ClusterOpt {
 	return func(co *clusterOpts) {
 		co.pf = pf
@@ -106,6 +112,15 @@ func ClusterWithTrace(ct trace.ClusterTrace) ClusterOpt {
 	}
 }
 
+// ClusterOnInitAllowUnavailable tells NewCluster to succeed
+// and not return an error as long as at least one redis instance
+// in the cluster can be successfully connected to.
+func ClusterOnInitAllowUnavailable(initAllowUnavailable bool) ClusterOpt {
+	return func(co *clusterOpts) {
+		co.initAllowUnavailable = initAllowUnavailable
+	}
+}
+
 // Cluster contains all information about a redis cluster needed to interact
 // with it, including a set of pools to each of its instances. All methods on
 // Cluster are thread-safe
@@ -123,6 +138,7 @@ type Cluster struct {
 	l              sync.RWMutex
 	pools          map[string]Client
 	primTopo, topo ClusterTopo
+	secondaries    map[string]map[string]ClusterNode
 
 	closeCh   chan struct{}
 	closeWG   sync.WaitGroup
@@ -132,6 +148,22 @@ type Cluster struct {
 	// nothing is reading the channel the errors will be dropped. The channel
 	// will be closed when the Close method is called.
 	ErrCh chan error
+}
+
+// DefaultClusterConnFunc is a ConnFunc which will return a Conn for a node in a
+// redis cluster using sane defaults and which has READONLY mode enabled, allowing
+// read-only commands on the connection even if the connected instance is currently
+// a replica, either by explicitly sending commands on the connection or by using
+// the DoSecondary method on the Cluster that owns the connection.
+var DefaultClusterConnFunc = func(network, addr string) (Conn, error) {
+	c, err := DefaultConnFunc(network, addr)
+	if err != nil {
+		return nil, err
+	} else if err := c.Do(Cmd(nil, "READONLY")); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
 }
 
 // NewCluster initializes and returns a Cluster instance. It will try every
@@ -178,7 +210,15 @@ func NewCluster(clusterAddrs []string, opts ...ClusterOpt) (*Cluster, error) {
 		break
 	}
 
-	if err := c.Sync(); err != nil {
+	p, err := c.pool("")
+	if err != nil {
+		for _, p := range c.pools {
+			p.Close()
+		}
+		return nil, err
+	}
+
+	if err := c.sync(p, c.co.initAllowUnavailable); err != nil {
 		for _, p := range c.pools {
 			p.Close()
 		}
@@ -297,6 +337,11 @@ func (c *Cluster) Topo() ClusterTopo {
 func (c *Cluster) getTopo(p Client) (ClusterTopo, error) {
 	var tt ClusterTopo
 	err := p.Do(Cmd(&tt, "CLUSTER", "SLOTS"))
+	if len(tt) == 0 && err == nil {
+		//This will happen between when nodes starts coming up after cluster goes down and
+		//Cluster swarm yet not ready using those nodes.
+		err = errors.New("no cluster slots assigned")
+	}
 	return tt, err
 }
 
@@ -310,7 +355,7 @@ func (c *Cluster) Sync() error {
 		return err
 	}
 	c.syncDedupe.do(func() {
-		err = c.sync(p)
+		err = c.sync(p, false)
 	})
 	return err
 }
@@ -366,7 +411,7 @@ func (c *Cluster) traceTopoChanged(prevTopo ClusterTopo, newTopo ClusterTopo) {
 
 // while this method is normally deduplicated by the Sync method's use of
 // dedupe it is perfectly thread-safe on its own and can be used whenever.
-func (c *Cluster) sync(p Client) error {
+func (c *Cluster) sync(p Client, silenceFlag bool) error {
 	tt, err := c.getTopo(p)
 	if err != nil {
 		return err
@@ -375,7 +420,11 @@ func (c *Cluster) sync(p Client) error {
 	for _, t := range tt {
 		// call pool just to ensure one exists for this addr
 		if _, err := c.pool(t.Addr); err != nil {
-			return errors.Errorf("error connecting to %s: %w", t.Addr, err)
+			if silenceFlag {
+				continue
+			} else {
+				return errors.Errorf("error connecting to %s: %w", t.Addr, err)
+			}
 		}
 	}
 
@@ -387,6 +436,18 @@ func (c *Cluster) sync(p Client) error {
 		defer c.l.Unlock()
 		c.topo = tt
 		c.primTopo = tt.Primaries()
+
+		c.secondaries = make(map[string]map[string]ClusterNode, len(c.primTopo))
+		for _, node := range c.topo {
+			if node.SecondaryOfAddr != "" {
+				m := c.secondaries[node.SecondaryOfAddr]
+				if m == nil {
+					m = make(map[string]ClusterNode, len(c.topo)/len(c.primTopo))
+					c.secondaries[node.SecondaryOfAddr] = m
+				}
+				m[node.Addr] = node
+			}
+		}
 
 		tm := tt.Map()
 		for addr, p := range c.pools {
@@ -438,6 +499,16 @@ func (c *Cluster) addrForKey(key string) string {
 	return ""
 }
 
+func (c *Cluster) secondaryAddrForKey(key string) string {
+	c.l.RLock()
+	defer c.l.RUnlock()
+	primAddr := c.addrForKey(key)
+	for addr := range c.secondaries[primAddr] {
+		return addr
+	}
+	return primAddr
+}
+
 type askConn struct {
 	Conn
 }
@@ -477,6 +548,29 @@ func (c *Cluster) Do(a Action) error {
 	} else {
 		key = keys[0]
 		addr = c.addrForKey(key)
+	}
+
+	return c.doInner(a, addr, key, false, doAttempts)
+}
+
+// DoSecondary is like Do but executes the Action on a random secondary for the affected keys.
+//
+// For DoSecondary to work, all connections must be created in read-only mode, by using a
+// custom ClusterPoolFunc that executes the READONLY command on each new connection.
+//
+// See ClusterPoolFunc for an example using the global DefaultClusterConnFunc.
+//
+// If the Action can not be handled by a secondary the Action will be send to the primary instead.
+func (c *Cluster) DoSecondary(a Action) error {
+	var addr, key string
+	keys := a.Keys()
+	if len(keys) == 0 {
+		// that's ok, key will then just be ""
+	} else if err := assertKeysSlot(keys); err != nil {
+		return err
+	} else {
+		key = keys[0]
+		addr = c.secondaryAddrForKey(key)
 	}
 
 	return c.doInner(a, addr, key, false, doAttempts)
@@ -594,10 +688,12 @@ func (c *Cluster) doInner(a Action, addr, key string, ask bool, attempts int) er
 		return nil
 	}
 
-	if !errors.As(err, new(resp2.Error)) {
+	var respErr resp2.Error
+	if !errors.As(err, &respErr) {
 		return err
 	}
-	msg := err.Error()
+
+	msg := respErr.Error()
 
 	clusterDown := strings.HasPrefix(msg, "CLUSTERDOWN ")
 	clusterDownChanged := c.setClusterDown(clusterDown)

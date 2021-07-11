@@ -152,7 +152,7 @@ func (cs chanSet) del(s string, ch chan<- PubSubMessage) bool {
 }
 
 func (cs chanSet) missing(ss []string) []string {
-	out := ss[:0]
+	out := make([]string, 0, len(ss))
 	for _, s := range ss {
 		if _, ok := cs[s]; !ok {
 			out = append(out, s)
@@ -179,10 +179,12 @@ func (cs chanSet) inverse() map[chan<- PubSubMessage][]string {
 //
 // If any methods return an error it means the PubSubConn has been Close'd and
 // subscribed msgCh's will no longer receive PubSubMessages from it. All methods
-// are threadsafe and non-blocking.
+// are threadsafe, but should be called in a different go-routine than that
+// which is reading from the PubSubMessage channels.
 //
-// NOTE if any channels block when being written to they will block all other
-// channels from receiving a publish.
+// NOTE the PubSubMessage channels should never block. If any channels block
+// when being written to they will block all other channels from receiving a
+// publish and block methods from returning.
 type PubSubConn interface {
 	// Subscribe subscribes the PubSubConn to the given set of channels. msgCh
 	// will receieve a PubSubMessage for every publish written to any of the
