@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/xerrors"
+
 	"github.com/mediocregopher/radix/v3/resp"
 	"github.com/mediocregopher/radix/v3/resp/resp2"
 )
@@ -290,24 +292,74 @@ func (c *cmdAction) ClusterCanRetry() bool {
 
 // MaybeNil is a type which wraps a receiver. It will first detect if what's
 // being received is a nil RESP type (either bulk string or array), and if so
-// set Nil to true. If not the return value will be unmarshaled into Rcv
-// normally.
+// set Nil to true. If not the return value will be unmarshalled into Rcv
+// normally. If the response being received is an empty array then the EmptyArray
+// field will be set and Rcv unmarshalled into normally.
 type MaybeNil struct {
-	Nil bool
-	Rcv interface{}
+	Nil        bool
+	EmptyArray bool
+	Rcv        interface{}
 }
 
 // UnmarshalRESP implements the method for the resp.Unmarshaler interface.
 func (mn *MaybeNil) UnmarshalRESP(br *bufio.Reader) error {
 	var rm resp2.RawMessage
-	if err := rm.UnmarshalRESP(br); err != nil {
+	err := rm.UnmarshalRESP(br)
+	switch {
+	case err != nil:
 		return err
-	} else if rm.IsNil() {
+	case rm.IsNil():
 		mn.Nil = true
 		return nil
+	case rm.IsEmptyArray():
+		mn.EmptyArray = true
+		fallthrough // to not break backwards compatibility
+	default:
+		return rm.UnmarshalInto(resp2.Any{I: mn.Rcv})
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Tuple is a helper type which can be used when unmarshaling a RESP array.
+// Each element of Tuple should be a pointer receiver which the corresponding
+// element of the RESP array will be unmarshaled into, or nil to skip that
+// element. The length of Tuple must match the length of the RESP array being
+// unmarshaled.
+//
+// Tuple is useful when unmarshaling the results from commands like EXEC and
+// EVAL.
+type Tuple []interface{}
+
+// UnmarshalRESP implements the method for the resp.Unmarshaler interface.
+func (t Tuple) UnmarshalRESP(br *bufio.Reader) error {
+	var ah resp2.ArrayHeader
+	if err := ah.UnmarshalRESP(br); err != nil {
+		return err
+	} else if ah.N != len(t) {
+		for i := 0; i < ah.N; i++ {
+			if err := (resp2.Any{}).UnmarshalRESP(br); err != nil {
+				return err
+			}
+		}
+		return resp.ErrDiscarded{
+			Err: fmt.Errorf("expected array of size %d but got array of size %d", len(t), ah.N),
+		}
 	}
 
-	return rm.UnmarshalInto(resp2.Any{I: mn.Rcv})
+	var retErr error
+	for i := 0; i < ah.N; i++ {
+		if err := (resp2.Any{I: t[i]}).UnmarshalRESP(br); err != nil {
+			// if the message was discarded then we can just continue, this
+			// method will return the first error it sees
+			if !xerrors.As(err, new(resp.ErrDiscarded)) {
+				return err
+			} else if retErr == nil {
+				retErr = err
+			}
+		}
+	}
+	return retErr
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -339,33 +391,61 @@ var (
 
 type evalAction struct {
 	EvalScript
-	args []string
-	rcv  interface{}
+	keys, args []string
+	rcv        interface{}
+
+	flat     bool
+	flatArgs []interface{}
 
 	eval bool
 }
 
 // Cmd is like the top-level Cmd but it uses the the EvalScript to perform an
-// EVALSHA command (and will automatically fallback to EVAL as necessary). args
-// must be at least as long as the numKeys argument of NewEvalScript.
-func (es EvalScript) Cmd(rcv interface{}, args ...string) Action {
-	if len(args) < es.numKeys {
+// EVALSHA command (and will automatically fallback to EVAL as necessary).
+// keysAndArgs must be at least as long as the numKeys argument of
+// NewEvalScript.
+func (es EvalScript) Cmd(rcv interface{}, keysAndArgs ...string) Action {
+	if len(keysAndArgs) < es.numKeys {
 		panic("not enough arguments passed into EvalScript.Cmd")
 	}
 	return &evalAction{
 		EvalScript: es,
-		args:       args,
+		keys:       keysAndArgs[:es.numKeys],
+		args:       keysAndArgs[es.numKeys:],
+		rcv:        rcv,
+	}
+}
+
+// FlatCmd is like the top level FlatCmd except it uses the EvalScript to
+// perform an EVALSHA command (and will automatically fallback to EVAL as
+// necessary). keys must be as long as the numKeys argument of NewEvalScript.
+func (es EvalScript) FlatCmd(rcv interface{}, keys []string, args ...interface{}) Action {
+	if len(keys) != es.numKeys {
+		panic("incorrect number of keys passed into EvalScript.FlatCmd")
+	}
+	return &evalAction{
+		EvalScript: es,
+		keys:       keys,
+		flatArgs:   args,
+		flat:       true,
 		rcv:        rcv,
 	}
 }
 
 func (ec *evalAction) Keys() []string {
-	return ec.args[:ec.numKeys]
+	return ec.keys
 }
 
 func (ec *evalAction) MarshalRESP(w io.Writer) error {
-	// EVAL(SHA) script/sum numkeys args...
-	if err := (resp2.ArrayHeader{N: 3 + len(ec.args)}).MarshalRESP(w); err != nil {
+	// EVAL(SHA) script/sum numkeys keys... args...
+	ah := resp2.ArrayHeader{N: 3 + len(ec.keys)}
+	if ec.flat {
+		ah.N += (resp2.Any{I: ec.flatArgs}).NumElems()
+	} else {
+		ah.N += len(ec.args)
+	}
+
+	if err := ah.MarshalRESP(w); err != nil {
 		return err
 	}
 
@@ -379,8 +459,23 @@ func (ec *evalAction) MarshalRESP(w io.Writer) error {
 	}
 
 	err = marshalBulkString(err, w, strconv.Itoa(ec.numKeys))
-	for i := range ec.args {
-		err = marshalBulkString(err, w, ec.args[i])
+	for i := range ec.keys {
+		err = marshalBulkString(err, w, ec.keys[i])
+	}
+	if err != nil {
+		return err
+	}
+
+	if ec.flat {
+		err = (resp2.Any{
+			I:                     ec.flatArgs,
+			MarshalBulkString:     true,
+			MarshalNoArrayHeaders: true,
+		}).MarshalRESP(w)
+	} else {
+		for i := range ec.args {
+			err = marshalBulkString(err, w, ec.args[i])
+		}
 	}
 	return err
 }
@@ -441,25 +536,34 @@ func (p pipeline) Run(c Conn) error {
 	if err := c.Encode(p); err != nil {
 		return err
 	}
-	for _, cmd := range p {
+
+	for i, cmd := range p {
 		if err := c.Decode(cmd); err != nil {
+			p.drain(c, len(p)-i-1)
 			return decodeErr(cmd, err)
 		}
 	}
 	return nil
 }
 
+func (p pipeline) drain(c Conn, n int) {
+	rcv := resp2.Any{I: nil}
+	for i := 0; i < n; i++ {
+		_ = c.Decode(&rcv)
+	}
+}
+
 func decodeErr(cmd CmdAction, err error) error {
 	c, ok := cmd.(*cmdAction)
 	if ok {
-		return fmt.Errorf(
-			"failed to decode pipeline CmdAction '%v' with keys %v: %v",
+		return xerrors.Errorf(
+			"failed to decode pipeline CmdAction '%v' with keys %v: %w",
 			c.cmd,
 			c.Keys(),
 			err)
 	}
-	return fmt.Errorf(
-		"failed to decode pipeline CmdAction '%v': %v",
+	return xerrors.Errorf(
+		"failed to decode pipeline CmdAction '%v': %w",
 		cmd,
 		err)
 }
@@ -494,10 +598,13 @@ type withConn struct {
 }
 
 // WithConn is used to perform a set of independent Actions on the same Conn.
-// key should be a key which one or more of the inner Actions is acting on, or
-// "" if no keys are being acted on. The callback function is what should
-// actually carry out the inner actions, and the error it returns will be
-// passed back up immediately.
+//
+// key should be a key which one or more of the inner Actions is going to act
+// on, or "" if no keys are being acted on or the keys aren't yet known. key is
+// generally only necessary when using Cluster.
+//
+// The callback function is what should actually carry out the inner actions,
+// and the error it returns will be passed back up immediately.
 //
 // NOTE that WithConn only ensures all inner Actions are performed on the same
 // Conn, it doesn't make them transactional. Use MULTI/WATCH/EXEC within a

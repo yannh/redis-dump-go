@@ -64,6 +64,7 @@ func (p prefix) String() string {
 var (
 	nilBulkString = []byte("$-1\r\n")
 	nilArray      = []byte("*-1\r\n")
+	emptyArray    = []byte("*0\r\n")
 )
 
 var bools = [][]byte{
@@ -674,7 +675,13 @@ func (a Any) MarshalRESP(w io.Writer) error {
 
 	// if it's a pointer we de-reference and try the pointed to value directly
 	if vv.Kind() == reflect.Ptr {
-		return a.cp(reflect.Indirect(vv).Interface()).MarshalRESP(w)
+		var ivv reflect.Value
+		if vv.IsNil() {
+			ivv = reflect.New(vv.Type().Elem())
+		} else {
+			ivv = reflect.Indirect(vv)
+		}
+		return a.cp(ivv.Interface()).MarshalRESP(w)
 	}
 
 	// some helper functions
@@ -817,7 +824,7 @@ func (a Any) UnmarshalRESP(br *bufio.Reader) error {
 	// read from the reader. If an *interface{} is given we instead unmarshal
 	// into a default (created based on the type of th message), then set the
 	// *interface{} to that
-	if ai, ok := a.I.(*interface{}); ok {
+	if ai, ok := a.I.(*interface{}); ok && prefix != ErrorPrefix[0] {
 		innerA := Any{I: saneDefault(prefix)}
 		if err := innerA.UnmarshalRESP(br); err != nil {
 			return err
@@ -1285,4 +1292,9 @@ func (rm RawMessage) UnmarshalInto(u resp.Unmarshaler) error {
 // IsNil returns true if the contents of RawMessage are one of the nil values.
 func (rm RawMessage) IsNil() bool {
 	return bytes.Equal(rm, nilBulkString) || bytes.Equal(rm, nilArray)
+}
+
+// IsEmptyArray returns true if the contents of RawMessage is empty array value.
+func (rm RawMessage) IsEmptyArray() bool {
+	return bytes.Equal(rm, emptyArray)
 }
