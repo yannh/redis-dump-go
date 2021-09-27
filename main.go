@@ -58,10 +58,19 @@ func realMain() int {
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
 	silent := flag.Bool("s", false, "Silent mode (disable logging of progress / stats)")
+	tls := flag.Bool("tls", false, "tls mode (default disable for enabling pass the parameter)")
+	caCert := flag.String("cacert", "", "provide cacert file path only if tls enable")
+	cert := flag.String("cert", "", "provide cert file path only if tls enable")
+	key := flag.String("key", "", "provide key file path only if tls enable")
 	flag.Parse()
 
 	if !isFlagPassed("db") {
 		db = nil
+	}
+	var tlshandler *redisdump.TlsHandler
+	if isFlagPassed("tls") {
+		*tls = true
+		tlshandler = redisdump.NewTlsHandler(*tls, *caCert, *cert, *key)
 	}
 
 	var serializer func([]string) string
@@ -99,15 +108,14 @@ func realMain() int {
 		}
 		wg.Done()
 	}()
-
 	logger := log.New(os.Stdout, "", 0)
 	if db == nil {
-		if err = redisdump.DumpServer(*host, *port, redisPassword, *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpServer(*host, *port, redisPassword, tlshandler, *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	} else {
-		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), tlshandler, *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
