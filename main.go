@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"sync"
 
@@ -102,12 +103,12 @@ func realMain() int {
 
 	logger := log.New(os.Stdout, "", 0)
 	if db == nil {
-		if err = redisdump.DumpServer(*host, *port, redisPassword, *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpServer(*host, *port, url.QueryEscape(redisPassword), *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	} else {
-		if err = redisdump.DumpDB(*host, *port, redisPassword, uint8(*db), *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
+		if err = redisdump.DumpDB(*host, *port, url.QueryEscape(redisPassword), uint8(*db), *filter, *nWorkers, *withTTL, *batchSize, *noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
