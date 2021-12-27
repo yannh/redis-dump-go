@@ -59,8 +59,10 @@ func realMain() int {
 	withTTL := flag.Bool("ttl", true, "Preserve Keys TTL")
 	output := flag.String("output", "resp", "Output type - can be resp or commands")
 	silent := flag.Bool("s", false, "Silent mode (disable logging of progress / stats)")
-	caCert := flag.String("cacert", "", "Cacert filepath")
-	cert := flag.String("cert", "", "SSL Certificate file path")
+
+	tls := flag.Bool("tls", false, "Establish a secure TLS connection")
+	caCert := flag.String("cacert", "", "CA Certificate file to verify with")
+	cert := flag.String("cert", "", "Private key file to authenticate with")
 	key := flag.String("key", "", "SSL private key file path")
 
 	flag.Parse()
@@ -70,7 +72,7 @@ func realMain() int {
 	}
 
 	var tlshandler *redisdump.TlsHandler = nil
-	if *cert != "" {
+	if isFlagPassed("tls") {
 		tlshandler = redisdump.NewTlsHandler(*caCert, *cert, *key)
 	}
 
