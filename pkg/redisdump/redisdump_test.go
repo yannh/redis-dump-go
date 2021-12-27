@@ -1,7 +1,16 @@
 package redisdump
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"io"
+	"log"
+	"regexp"
+	"strings"
 	"testing"
+
+	"github.com/mediocregopher/radix/v3"
 )
 
 func testEqString(a, b []string) bool {
@@ -227,5 +236,221 @@ func TestParseKeyspaceInfo(t *testing.T) {
 	}
 	if !testEqUint8(dbIds, []uint8{0, 2}) {
 		t.Errorf("Failed parsing keyspaceInfo: got %v", dbIds)
+	}
+}
+
+func TestRedisDialOpts(t *testing.T) {
+	for i, testCase := range []struct {
+		redisPassword string
+		tlsHandler    *TlsHandler
+		db            uint8
+		nDialOpts     int
+		err           error
+	}{
+		{
+			"",
+			nil,
+			1,
+			2,
+			nil,
+		}, {
+			"test",
+			&TlsHandler{},
+			1,
+			4,
+			nil,
+		},
+	} {
+		dOpts, err := redisDialOpts(testCase.redisPassword, testCase.tlsHandler, testCase.db)
+		if err != testCase.err {
+			t.Errorf("expected error to be %+v, got %+v", testCase.err, err)
+		}
+
+		// DialOpts are functions and are pretty difficult to compare :(
+		// "Functions are equal only if they are both nil"
+		// Therefore we only compare that we are getting the right amount
+		if len(dOpts) != testCase.nDialOpts {
+			t.Errorf("test %d, expected %d dialOpts, got %d", i, testCase.nDialOpts, len(dOpts))
+		}
+
+	}
+}
+
+type mockRadixClient struct{}
+
+func (m *mockRadixClient) Do(action radix.Action) error {
+	return action.Run(nil)
+}
+func (m *mockRadixClient) Close() error {
+	return nil
+}
+
+type mockRadixAction struct {
+	rcv  interface{}
+	cmd  string
+	args []string
+}
+
+func (m *mockRadixAction) Keys() []string {
+	return nil
+}
+
+func (m *mockRadixAction) Run(conn radix.Conn) error {
+	if m.cmd == "TYPE" {
+		key := m.args[0]
+		// if the key name contains string, the object is of type string
+		if strings.Contains(key, "string") {
+			switch v := m.rcv.(type) {
+			case *string:
+				*v = "string"
+			}
+		}
+		if strings.Contains(key, "list") {
+			switch v := m.rcv.(type) {
+			case *string:
+				*v = "list"
+			}
+		}
+
+		return nil
+	}
+
+	if m.cmd == "GET" {
+		switch v := m.rcv.(type) {
+		case *string:
+			*v = "stringvalue"
+		default:
+			fmt.Printf("DEFAULT")
+		}
+
+		return nil
+	}
+
+	if m.cmd == "TTL" {
+		switch v := m.rcv.(type) {
+		case *int64:
+			*v = 5
+		}
+
+		return nil
+	}
+
+	if m.cmd == "KEYS" {
+		switch v := m.rcv.(type) {
+		case *[]string:
+			a := []string{"key1", "key2", "key3", "key4", "key5"}
+			*v = a
+		}
+
+		return nil
+	}
+
+	if m.cmd == "LRANGE" {
+		switch v := m.rcv.(type) {
+		case *[]string:
+			a := []string{"listkey1", "listval1", "listkey2", "listval2"}
+			*v = a
+
+		default:
+			fmt.Printf("ERRORRRR")
+		}
+		return nil
+	}
+
+	return nil
+}
+
+func (m *mockRadixAction) MarshalRESP(io.Writer) error {
+	return nil
+}
+
+func (m *mockRadixAction) UnmarshalRESP(reader *bufio.Reader) error {
+	return nil
+}
+
+func getMockRadixAction(rcv interface{}, cmd string, args ...string) radix.CmdAction {
+	return &mockRadixAction{
+		rcv:  rcv,
+		cmd:  cmd,
+		args: args,
+	}
+}
+
+func TestDumpKeys(t *testing.T) {
+	for i, testCase := range []struct {
+		keys        []string
+		withTTL     bool
+		expectMatch string
+	}{
+		{
+			[]string{"somestring"},
+			false,
+			"^SET somestring stringvalue\n$",
+		},
+		{
+			[]string{"somestring", "somelist"},
+			false,
+			"^SET somestring stringvalue\nRPUSH somelist listkey1 listval1 listkey2 listval2\n$",
+		},
+		{
+			[]string{"somestring"},
+			true,
+			"^SET somestring stringvalue\nEXPIREAT somestring [0-9]+\n$",
+		},
+	} {
+		var m mockRadixClient
+		var b bytes.Buffer
+		l := log.New(&b, "", 0)
+		err := dumpKeys(&m, getMockRadixAction, testCase.keys, testCase.withTTL, 5, l, RedisCmdSerializer)
+		if err != nil {
+			t.Errorf("received error %+v", err)
+		}
+		match, _ := regexp.MatchString(testCase.expectMatch, b.String())
+		if !match {
+			t.Errorf("test %d: expected to match %s, got %s", i, testCase.expectMatch, b.String())
+		}
+	}
+}
+
+func TestScanKeysLegacy(t *testing.T) {
+	for i, testCase := range []struct {
+		n     int
+		bSize int
+		err   error
+	}{
+		{
+			5,
+			100,
+			nil,
+		},
+		{
+			5,
+			4,
+			nil,
+		},
+		{
+			5,
+			5,
+			nil,
+		},
+	} {
+		var m mockRadixClient
+		keyBatches := make(chan []string)
+
+		n := 0
+		go func() {
+			for b := range keyBatches {
+				n += len(b)
+			}
+		}()
+
+		err := scanKeysLegacy(&m, getMockRadixAction, 0, 100, "*", keyBatches, nil)
+		close(keyBatches)
+		if err != testCase.err {
+			t.Errorf("test %d, expected err to be %s, got %s", i, testCase.err, err)
+		}
+		if n != testCase.n {
+			t.Errorf("test %d, expected %d keys, got %d", i, testCase.n, n)
+		}
 	}
 }
