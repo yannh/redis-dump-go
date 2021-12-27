@@ -71,9 +71,10 @@ func FromFlags(progName string, args []string) (Config, error) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 
+	var db uint
 	flags.StringVar(&c.host, "host", "127.0.0.1", "Server host")
 	flags.IntVar(&c.port, "port", 6379, "Server port")
-	flags.UintVar(c.db, "db", 0, "only dump this database (default: all databases)")
+	flags.UintVar(&db, "db", 0, "only dump this database (default: all databases)")
 	flags.StringVar(&c.filter, "filter", "*", "Key filter to use")
 	flags.BoolVar(&c.noscan, "noscan", false, "Use KEYS * instead of SCAN - for Redis <=2.8")
 	flags.IntVar(&c.batchSize, "batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time")
@@ -92,8 +93,9 @@ func FromFlags(progName string, args []string) (Config, error) {
 		flags.PrintDefaults()
 	}
 
-	if !isFlagPassed("db") {
-		c.db = nil
+	c.db = nil
+	if isFlagPassed("db") {
+		c.db = &db
 	}
 
 	err := flags.Parse(args)
