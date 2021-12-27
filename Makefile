@@ -1,6 +1,6 @@
 #!/usr/bin/make
 
-.PHONY: test build build-static docker-image docker-test docker-build-static acceptance-tests
+.PHONY: test build build-static build-generator-static docker-image save-image push-image docker-test docker-build-static docker-build-generator-static release acceptance-tests
 
 RELEASE_VERSION ?= latest
 
@@ -43,5 +43,5 @@ docker-build-generator-static:
 release:
 	docker run -e GITHUB_TOKEN -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v0.164.0-amd64 --rm-dist
 
-acceptance-tests:
+acceptance-tests: docker-build-static docker-build-generator-static
 	docker-compose run tests

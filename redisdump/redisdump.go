@@ -145,7 +145,7 @@ func RESPSerializer(cmd []string) string {
 	return buf.String()
 }
 
-func dumpKeys(client radix.Client, keys []string, withTTL bool, batchsize int, logger *log.Logger, serializer Serializer) error {
+func dumpKeys(client radix.Client, keys []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmds [][]string
 
@@ -170,28 +170,28 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, batchsize int, l
 			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmds = listToRedisCmds(key, val, batchsize)
+			redisCmds = listToRedisCmds(key, val, batchSize)
 
 		case "set":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
-			redisCmds = setToRedisCmds(key, val, batchsize)
+			redisCmds = setToRedisCmds(key, val, batchSize)
 
 		case "hash":
 			var val map[string]string
 			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
-			redisCmds = hashToRedisCmds(key, val, batchsize)
+			redisCmds = hashToRedisCmds(key, val, batchSize)
 
 		case "zset":
 			var val []string
 			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmds = zsetToRedisCmds(key, val, batchsize)
+			redisCmds = zsetToRedisCmds(key, val, batchSize)
 
 		case "none":
 
@@ -328,19 +328,36 @@ func scanKeysLegacy(client radix.Client, db uint8, filter string, keyBatches cha
 }
 
 // RedisURL builds a connect URL given a Host, port, db & password
-func RedisURL(redisHost string, redisPort string, redisDB string, redisPassword string) string {
-	switch {
-	case redisDB == "":
-		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort)
-	case redisDB != "":
-		return "redis://:" + redisPassword + "@" + redisHost + ":" + fmt.Sprint(redisPort) + "/" + redisDB
-	}
+func RedisURL(redisHost string, redisPort string) string {
+	return fmt.Sprintf("redis://%s:%s", redisHost, redisPort)
+}
 
-	return ""
+func redisConnFunc(redisPassword string, tlsHandler *TlsHandler, db uint8) func(network, addr string) (radix.Conn, error) {
+	return func(network, addr string) (radix.Conn, error) {
+		dialOpts := []radix.DialOpt{
+			radix.DialTimeout(5 * time.Minute),
+		}
+		if redisPassword != "" {
+			dialOpts = append(dialOpts, radix.DialAuthPass(redisPassword))
+		}
+		if tlsHandler != nil {
+			tlsCfg, err := tlsConfig(tlsHandler)
+			if err != nil {
+				return nil, err
+			}
+			dialOpts = append(dialOpts, radix.DialUseTLS(tlsCfg))
+		}
+
+		dialOpts = append(dialOpts, radix.DialSelectDB(int(db)))
+
+		return radix.Dial(network, addr,
+			dialOpts...,
+		)
+	}
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *TlsHandler, db uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	var err error
 
 	keyGenerator := scanKeys
@@ -357,13 +374,8 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 		}
 	}()
 
-	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort), fmt.Sprint(db), redisPassword)
-
-	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		return radix.Dial(network, addr,
-			radix.DialTimeout(5*time.Minute),
-		)
-	}
+	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort))
+	customConnFunc := redisConnFunc(redisPassword, tlsHandler, db)
 
 	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(customConnFunc))
 	if err != nil {
@@ -395,15 +407,15 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, db uint8, fil
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisHost string, redisPort int, redisPassword string, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
-	url := RedisURL(redisHost, fmt.Sprint(redisPort), "", redisPassword)
+func DumpServer(redisHost string, redisPort int, redisPassword string, tlsHandler *TlsHandler, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+	url := RedisURL(redisHost, fmt.Sprint(redisPort))
 	dbs, err := getDBIndexes(url)
 	if err != nil {
 		return err
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisHost, redisPort, redisPassword, db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, tlsHandler, db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
