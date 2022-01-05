@@ -1,5 +1,5 @@
 FROM alpine:3.15
 MAINTAINER Yann HAMON <yann@mandragor.org>
 RUN apk add ca-certificates
-COPY bin/redis-dump-go /
+COPY redis-dump-go /
 ENTRYPOINT ["/redis-dump-go"]
