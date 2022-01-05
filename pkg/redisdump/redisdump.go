@@ -145,50 +145,51 @@ func RESPSerializer(cmd []string) string {
 	return buf.String()
 }
 
-func dumpKeys(client radix.Client, keys []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer) error {
+type radixCmder func(rcv interface{}, cmd string, args ...string) radix.CmdAction
+
+func dumpKeys(client radix.Client, cmd radixCmder, keys []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmds [][]string
 
 	for _, key := range keys {
-		var keyType string
+		keyType := ""
 
-		err = client.Do(radix.Cmd(&keyType, "TYPE", key))
+		err = client.Do(cmd(&keyType, "TYPE", key))
 		if err != nil {
 			return err
 		}
-
 		switch keyType {
 		case "string":
 			var val string
-			if err = client.Do(radix.Cmd(&val, "GET", key)); err != nil {
+			if err = client.Do(cmd(&val, "GET", key)); err != nil {
 				return err
 			}
 			redisCmds = [][]string{stringToRedisCmd(key, val)}
 
 		case "list":
 			var val []string
-			if err = client.Do(radix.Cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
+			if err = client.Do(cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
 				return err
 			}
 			redisCmds = listToRedisCmds(key, val, batchSize)
 
 		case "set":
 			var val []string
-			if err = client.Do(radix.Cmd(&val, "SMEMBERS", key)); err != nil {
+			if err = client.Do(cmd(&val, "SMEMBERS", key)); err != nil {
 				return err
 			}
 			redisCmds = setToRedisCmds(key, val, batchSize)
 
 		case "hash":
 			var val map[string]string
-			if err = client.Do(radix.Cmd(&val, "HGETALL", key)); err != nil {
+			if err = client.Do(cmd(&val, "HGETALL", key)); err != nil {
 				return err
 			}
 			redisCmds = hashToRedisCmds(key, val, batchSize)
 
 		case "zset":
 			var val []string
-			if err = client.Do(radix.Cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
+			if err = client.Do(cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
 			redisCmds = zsetToRedisCmds(key, val, batchSize)
@@ -205,7 +206,7 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, batchSize int, l
 
 		if withTTL {
 			var ttl int64
-			if err = client.Do(radix.Cmd(&ttl, "TTL", key)); err != nil {
+			if err = client.Do(cmd(&ttl, "TTL", key)); err != nil {
 				return err
 			}
 			if ttl > 0 {
@@ -220,7 +221,7 @@ func dumpKeys(client radix.Client, keys []string, withTTL bool, batchSize int, l
 
 func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
-		if err := dumpKeys(client, keyBatch, withTTL, batchSize, logger, serializer); err != nil {
+		if err := dumpKeys(client, radix.Cmd, keyBatch, withTTL, batchSize, logger, serializer); err != nil {
 			errors <- err
 		}
 	}
@@ -277,8 +278,7 @@ func getDBIndexes(redisURL string) ([]uint8, error) {
 	return parseKeyspaceInfo(keyspaceInfo)
 }
 
-func scanKeys(client radix.Client, db uint8, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
-	keyBatchSize := 100
+func scanKeys(client radix.Client, cmd radixCmder, db uint8, keyBatchSize int, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
 	s := radix.NewScanner(client, radix.ScanOpts{Command: "SCAN", Pattern: filter, Count: keyBatchSize})
 
 	nProcessed := 0
@@ -308,11 +308,10 @@ func min(a, b int) int {
 	return b
 }
 
-func scanKeysLegacy(client radix.Client, db uint8, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
-	keyBatchSize := 100
+func scanKeysLegacy(client radix.Client, cmd radixCmder, db uint8, keyBatchSize int, filter string, keyBatches chan<- []string, progressNotifications chan<- ProgressNotification) error {
 	var err error
 	var keys []string
-	if err = client.Do(radix.Cmd(&keys, "KEYS", filter)); err != nil {
+	if err = client.Do(cmd(&keys, "KEYS", filter)); err != nil {
 		return err
 	}
 
@@ -332,32 +331,28 @@ func RedisURL(redisHost string, redisPort string) string {
 	return fmt.Sprintf("redis://%s:%s", redisHost, redisPort)
 }
 
-func redisConnFunc(redisPassword string, tlsHandler *TlsHandler, db uint8) func(network, addr string) (radix.Conn, error) {
-	return func(network, addr string) (radix.Conn, error) {
-		dialOpts := []radix.DialOpt{
-			radix.DialTimeout(5 * time.Minute),
-		}
-		if redisPassword != "" {
-			dialOpts = append(dialOpts, radix.DialAuthPass(redisPassword))
-		}
-		if tlsHandler != nil {
-			tlsCfg, err := tlsConfig(tlsHandler)
-			if err != nil {
-				return nil, err
-			}
-			dialOpts = append(dialOpts, radix.DialUseTLS(tlsCfg))
-		}
-
-		dialOpts = append(dialOpts, radix.DialSelectDB(int(db)))
-
-		return radix.Dial(network, addr,
-			dialOpts...,
-		)
+func redisDialOpts(redisPassword string, tlsHandler *TlsHandler, db uint8) ([]radix.DialOpt, error) {
+	dialOpts := []radix.DialOpt{
+		radix.DialTimeout(5 * time.Minute),
 	}
+	if redisPassword != "" {
+		dialOpts = append(dialOpts, radix.DialAuthPass(redisPassword))
+	}
+	if tlsHandler != nil {
+		tlsCfg, err := tlsConfig(tlsHandler)
+		if err != nil {
+			return nil, err
+		}
+		dialOpts = append(dialOpts, radix.DialUseTLS(tlsCfg))
+	}
+
+	dialOpts = append(dialOpts, radix.DialSelectDB(int(db)))
+
+	return dialOpts, nil
 }
 
 // DumpDB dumps all keys from a single Redis DB
-func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *TlsHandler, db uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
+func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *TlsHandler, db *uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	var err error
 
 	keyGenerator := scanKeys
@@ -375,7 +370,14 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *T
 	}()
 
 	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort))
-	customConnFunc := redisConnFunc(redisPassword, tlsHandler, db)
+	customConnFunc := func(network, addr string) (radix.Conn, error) {
+		dialOpts, err := redisDialOpts(redisPassword, tlsHandler, *db)
+		if err != nil {
+			return nil, err
+		}
+
+		return radix.Dial(network, addr, dialOpts...)
+	}
 
 	client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(customConnFunc))
 	if err != nil {
@@ -383,10 +385,10 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *T
 	}
 	defer client.Close()
 
-	if err = client.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(db))); err != nil {
+	if err = client.Do(radix.Cmd(nil, "SELECT", fmt.Sprint(*db))); err != nil {
 		return err
 	}
-	logger.Printf(serializer([]string{"SELECT", fmt.Sprint(db)}))
+	logger.Printf(serializer([]string{"SELECT", fmt.Sprint(*db)}))
 
 	done := make(chan bool)
 	keyBatches := make(chan []string)
@@ -394,7 +396,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *T
 		go dumpKeysWorker(client, keyBatches, withTTL, batchSize, logger, serializer, errors, done)
 	}
 
-	keyGenerator(client, db, filter, keyBatches, progress)
+	keyGenerator(client, radix.Cmd, *db, 100, filter, keyBatches, progress)
 	close(keyBatches)
 
 	for i := 0; i < nWorkers; i++ {
@@ -415,7 +417,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, tlsHandle
 	}
 
 	for _, db := range dbs {
-		if err = DumpDB(redisHost, redisPort, redisPassword, tlsHandler, db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
+		if err = DumpDB(redisHost, redisPort, redisPassword, tlsHandler, &db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -10,7 +8,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yannh/redis-dump-go/redisdump"
+	"github.com/yannh/redis-dump-go/pkg/config"
+	"github.com/yannh/redis-dump-go/pkg/redisdump"
 )
 
 type progressLogger struct {
@@ -37,83 +36,25 @@ func (p *progressLogger) drawProgress(to io.Writer, db uint8, nDumped int) {
 	fmt.Fprintf(to, "\rDatabase %d: %d element dumped", db, nDumped)
 }
 
-func isFlagPassed(name string) bool {
-	found := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
-}
-
-type Config struct {
-	host      string
-	port      int
-	db        *uint
-	filter    string
-	noscan    bool
-	batchSize int
-	nWorkers  int
-	withTTL   bool
-	output    string
-	silent    bool
-	tls       bool
-	caCert    string
-	cert      string
-	key       string
-}
-
-func FromFlags(progName string, args []string) (Config, error) {
-	c := Config{}
-
-	flags := flag.NewFlagSet(progName, flag.ExitOnError)
-	var buf bytes.Buffer
-	flags.SetOutput(&buf)
-
-	var db uint
-	flags.StringVar(&c.host, "host", "127.0.0.1", "Server host")
-	flags.IntVar(&c.port, "port", 6379, "Server port")
-	flags.UintVar(&db, "db", 0, "only dump this database (default: all databases)")
-	flags.StringVar(&c.filter, "filter", "*", "Key filter to use")
-	flags.BoolVar(&c.noscan, "noscan", false, "Use KEYS * instead of SCAN - for Redis <=2.8")
-	flags.IntVar(&c.batchSize, "batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time")
-	flags.IntVar(&c.nWorkers, "n", 10, "Parallel workers")
-	flags.BoolVar(&c.withTTL, "ttl", true, "Preserve Keys TTL")
-	flags.StringVar(&c.output, "output", "resp", "Output type - can be resp or commands")
-	flags.BoolVar(&c.silent, "s", false, "Silent mode (disable logging of progress / stats)")
-	flags.BoolVar(&c.tls, "tls", false, "Establish a secure TLS connection")
-	flags.StringVar(&c.caCert, "cacert", "", "CA Certificate file to verify with")
-	flags.StringVar(&c.cert, "cert", "", "Private key file to authenticate with")
-	flags.StringVar(&c.key, "key", "", "SSL private key file path")
-	flags.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [OPTION]... [FILE OR FOLDER]...\n", progName)
-
-		flags.SetOutput(os.Stderr)
-		flags.PrintDefaults()
-	}
-
-	c.db = nil
-	if isFlagPassed("db") {
-		c.db = &db
-	}
-
-	err := flags.Parse(args)
-	return c, err
-}
-
 func realMain() int {
 	var err error
 
-	c, _ := FromFlags(os.Args[0], os.Args[1:])
+	c, out, err := config.FromFlags(os.Args[0], os.Args[1:])
+	if out != "" {
+		fmt.Println(out)
+		return 1
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "failed parsing command line: %s\n", err.Error())
+		return 1
+	}
 
 	var tlshandler *redisdump.TlsHandler = nil
-	if c.tls == true {
-		tlshandler = redisdump.NewTlsHandler(c.caCert, c.cert, c.key)
+	if c.Tls == true {
+		tlshandler = redisdump.NewTlsHandler(c.CaCert, c.Cert, c.Key)
 	}
 
 	var serializer func([]string) string
-	switch c.output {
+	switch c.Output {
 	case "resp":
 		serializer = redisdump.RESPSerializer
 
@@ -133,7 +74,7 @@ func realMain() int {
 	defer func() {
 		close(progressNotifs)
 		wg.Wait()
-		if !(c.silent) {
+		if !(c.Silent) {
 			fmt.Fprint(os.Stderr, "\n")
 		}
 	}()
@@ -141,7 +82,7 @@ func realMain() int {
 	pl := newProgressLogger()
 	go func() {
 		for n := range progressNotifs {
-			if !(c.silent) {
+			if !(c.Silent) {
 				pl.drawProgress(os.Stderr, n.Db, n.Done)
 			}
 		}
@@ -149,13 +90,17 @@ func realMain() int {
 	}()
 
 	logger := log.New(os.Stdout, "", 0)
-	if c.db == nil {
-		if err = redisdump.DumpServer(c.host, c.port, url.QueryEscape(redisPassword), tlshandler, c.filter, c.nWorkers, c.withTTL, c.batchSize, c.noscan, logger, serializer, progressNotifs); err != nil {
+	if c.Db < 0 { // <0 is for all dbs, easier to manage than a *uint unfortunately
+		if err = redisdump.DumpServer(c.Host, c.Port, url.QueryEscape(redisPassword), tlshandler, c.Filter, c.NWorkers, c.WithTTL, c.BatchSize, c.Noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
 	} else {
-		if err = redisdump.DumpDB(c.host, c.port, url.QueryEscape(redisPassword), tlshandler, uint8(*c.db), c.filter, c.nWorkers, c.withTTL, c.batchSize, c.noscan, logger, serializer, progressNotifs); err != nil {
+		var db *uint8 = nil
+		if c.Db != -1 {
+			*db = uint8(c.Db)
+		}
+		if err = redisdump.DumpDB(c.Host, c.Port, url.QueryEscape(redisPassword), tlshandler, db, c.Filter, c.NWorkers, c.WithTTL, c.BatchSize, c.Noscan, logger, serializer, progressNotifs); err != nil {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			return 1
 		}
