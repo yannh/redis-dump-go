@@ -1,34 +1,60 @@
+project_name: redis-dump-go
 builds:
-  - goos:
-      - windows
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm
-      - arm64
-    goarm:
-      - 6
-      - 7
+  - main: ./
     env:
       - CGO_ENABLED=0
       - GOFLAGS = -mod=vendor
       - GO111MODULE = on
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
     flags:
       - -trimpath
       - -tags=netgo
       - -a
     ldflags:
       - -extldflags "-static"
+      - -X main.version={{.Tag}}
+
 archives:
   - format: tar.gz
     format_overrides:
       - goos: windows
         format: zip
+    name_template: "{{ .ProjectName  }}-{{ .Os  }}-{{ .Arch  }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+
+dockers:
+  - image_templates:
+      - 'ghcr.io/yannh/redis-dump-go:latest'
+      - 'ghcr.io/yannh/redis-dump-go:{{ .Tag }}'
+      - 'ghcr.io/yannh/redis-dump-go:{{ .Tag }}-amd64'
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goos: linux
+    goarch: amd64
+  - image_templates:
+      - 'ghcr.io/yannh/redis-dump-go:latest-alpine'
+      - 'ghcr.io/yannh/redis-dump-go:{{ .Tag }}-alpine'
+      - 'ghcr.io/yannh/redis-dump-go:{{ .Tag }}-amd64-alpine'
+    dockerfile: Dockerfile-alpine
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goos: linux
+    goarch: amd64
+
 checksum:
   name_template: 'CHECKSUMS'
+
 snapshot:
   name_template: "{{ .Tag }}-next"
+
 changelog:
   sort: asc
   filters:

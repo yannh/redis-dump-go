@@ -40,8 +40,12 @@ docker-build-static:
 docker-build-generator-static:
 	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.16 make build-generator-static
 
+goreleaser-build-static:
+	docker run -t -e GOOS=linux -e GOARCH=amd64 -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v0.176.0 build --single-target --skip-post-hooks --rm-dist --snapshot
+	cp dist/redis-dump-go_linux_amd64/redis-dump-go bin/
+
 release:
-	docker run -e GITHUB_TOKEN -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v0.164.0-amd64 --rm-dist
+	docker run -e GITHUB_TOKEN -t -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v0.176.0 release --rm-dist
 
 acceptance-tests: docker-build-static docker-build-generator-static
 	docker-compose run tests
