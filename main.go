@@ -39,11 +39,18 @@ func (p *progressLogger) drawProgress(to io.Writer, db uint8, nDumped int) {
 func realMain() int {
 	var err error
 
-	c, out, err := config.FromFlags(os.Args[0], os.Args[1:])
-	if out != "" {
-		fmt.Println(out)
-		return 1
-	} else if err != nil {
+	c, outBuf, err := config.FromFlags(os.Args[0], os.Args[1:])
+	if outBuf != "" {
+		out := os.Stderr
+		errCode := 1
+		if c.Help {
+			out = os.Stdout
+			errCode = 0
+		}
+		fmt.Fprintln(out, outBuf)
+		return errCode
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed parsing command line: %s\n", err.Error())
 		return 1
 	}
