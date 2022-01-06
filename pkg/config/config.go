@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
 )
 
 type Config struct {
@@ -38,9 +37,9 @@ func isFlagPassed(flags *flag.FlagSet, name string) bool {
 func FromFlags(progName string, args []string) (Config, string, error) {
 	c := Config{}
 
-	flags := flag.NewFlagSet(progName, flag.ExitOnError)
-	var buf bytes.Buffer
-	flags.SetOutput(&buf)
+	flags := flag.NewFlagSet(progName, flag.ContinueOnError)
+	var outBuf bytes.Buffer
+	flags.SetOutput(&outBuf)
 
 	flags.StringVar(&c.Host, "host", "127.0.0.1", "Server host")
 	flags.IntVar(&c.Port, "port", 6379, "Server port")
@@ -58,9 +57,7 @@ func FromFlags(progName string, args []string) (Config, string, error) {
 	flags.StringVar(&c.Key, "key", "", "SSL private key file path")
 	flags.BoolVar(&c.Help, "h", false, "show help information")
 	flags.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [OPTION]... [FILE OR FOLDER]...\n", progName)
-
-		flags.SetOutput(os.Stderr)
+		fmt.Fprintf(&outBuf, "Usage: %s [OPTION]...\n", progName)
 		flags.PrintDefaults()
 	}
 
@@ -70,5 +67,5 @@ func FromFlags(progName string, args []string) (Config, string, error) {
 		flags.Usage()
 	}
 
-	return c, buf.String(), err
+	return c, outBuf.String(), err
 }
