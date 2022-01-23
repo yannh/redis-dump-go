@@ -24,6 +24,19 @@ func TestFromFlags(t *testing.T) {
 			},
 		},
 		{
+			[]string{"-db", "2"},
+			Config{
+				Db:        2,
+				Host:      "127.0.0.1",
+				Port:      6379,
+				Filter:    "*",
+				BatchSize: 1000,
+				NWorkers:  10,
+				WithTTL:   true,
+				Output:    "resp",
+			},
+		},
+		{
 			[]string{"-ttl=false"},
 			Config{
 				Db:        -1,

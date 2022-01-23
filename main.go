@@ -103,7 +103,7 @@ func realMain() int {
 			return 1
 		}
 	} else {
-		var db *uint8 = nil
+		var db *uint8 = new(uint8)
 		if c.Db != -1 {
 			*db = uint8(c.Db)
 		}
