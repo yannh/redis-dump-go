@@ -263,8 +263,17 @@ func parseKeyspaceInfo(keyspaceInfo string) ([]uint8, error) {
 	return dbs, nil
 }
 
-func getDBIndexes(redisURL string) ([]uint8, error) {
-	client, err := radix.NewPool("tcp", redisURL, 1)
+func getDBIndexes(redisURL string, redisPassword string, tlsHandler *TlsHandler) ([]uint8, error) {
+	customConnFunc := func(network, addr string) (radix.Conn, error) {
+		dialOpts, err := redisDialOpts(redisPassword, tlsHandler, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		return radix.Dial(network, addr, dialOpts...)
+	}
+
+	client, err := radix.NewPool("tcp", redisURL, 1, radix.PoolConnFunc(customConnFunc))
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +340,7 @@ func RedisURL(redisHost string, redisPort string) string {
 	return fmt.Sprintf("redis://%s:%s", redisHost, redisPort)
 }
 
-func redisDialOpts(redisPassword string, tlsHandler *TlsHandler, db uint8) ([]radix.DialOpt, error) {
+func redisDialOpts(redisPassword string, tlsHandler *TlsHandler, db *uint8) ([]radix.DialOpt, error) {
 	dialOpts := []radix.DialOpt{
 		radix.DialTimeout(5 * time.Minute),
 	}
@@ -346,7 +355,9 @@ func redisDialOpts(redisPassword string, tlsHandler *TlsHandler, db uint8) ([]ra
 		dialOpts = append(dialOpts, radix.DialUseTLS(tlsCfg))
 	}
 
-	dialOpts = append(dialOpts, radix.DialSelectDB(int(db)))
+	if db != nil {
+		dialOpts = append(dialOpts, radix.DialSelectDB(int(*db)))
+	}
 
 	return dialOpts, nil
 }
@@ -371,7 +382,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *T
 
 	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort))
 	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		dialOpts, err := redisDialOpts(redisPassword, tlsHandler, *db)
+		dialOpts, err := redisDialOpts(redisPassword, tlsHandler, db)
 		if err != nil {
 			return nil, err
 		}
@@ -411,7 +422,7 @@ func DumpDB(redisHost string, redisPort int, redisPassword string, tlsHandler *T
 // are regularly sent to the channel progressNotifications
 func DumpServer(redisHost string, redisPort int, redisPassword string, tlsHandler *TlsHandler, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	url := RedisURL(redisHost, fmt.Sprint(redisPort))
-	dbs, err := getDBIndexes(url)
+	dbs, err := getDBIndexes(url, redisPassword, tlsHandler)
 	if err != nil {
 		return err
 	}

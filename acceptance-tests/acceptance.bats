@@ -16,6 +16,11 @@
   [ "$status" -eq 0 ]
 }
 
+@test "Pass when using a non-default db, and a password" {
+  run tests/select-db-with-password.sh
+  [ "$status" -eq 0 ]
+}
+
 # https://github.com/yannh/redis-dump-go/issues/11
 # https://github.com/yannh/redis-dump-go/issues/18
 @test "Pass when importing a ZSET with 1M entries" {

@@ -261,7 +261,7 @@ func TestRedisDialOpts(t *testing.T) {
 			nil,
 		},
 	} {
-		dOpts, err := redisDialOpts(testCase.redisPassword, testCase.tlsHandler, testCase.db)
+		dOpts, err := redisDialOpts(testCase.redisPassword, testCase.tlsHandler, &testCase.db)
 		if err != testCase.err {
 			t.Errorf("expected error to be %+v, got %+v", testCase.err, err)
 		}
