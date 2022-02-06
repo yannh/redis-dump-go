@@ -18,7 +18,6 @@ $REDISCMD FLUSHDB
 $REDISCMD --pipe <backup
 NEWDBSIZE=`$REDISCMD dbsize`
 echo "Redis has $DBSIZE entries"
-
 echo "-> Comparing DB sizes..."
 if [ $DBSIZE -ne $NEWDBSIZE ]; then
   echo "ERROR - restored DB has $NEWDBSIZE elements, expected $DBSIZE"
