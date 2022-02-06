@@ -12,6 +12,8 @@ import (
 	radix "github.com/mediocregopher/radix/v3"
 )
 
+var AllDBs *uint8 = nil
+
 func ttlToRedisCmd(k string, val int64) []string {
 	return []string{"EXPIREAT", k, fmt.Sprint(time.Now().Unix() + val)}
 }
@@ -379,14 +381,21 @@ func DumpDB(client radix.Client, db *uint8, filter string, nWorkers int, withTTL
 	return nil
 }
 
+type Host struct {
+	Host       string
+	Port       int
+	Password   string
+	TlsHandler *TlsHandler
+}
+
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(redisHost string, redisPort int, redisPassword string, db *uint8, tlsHandler *TlsHandler, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
-	redisURL := RedisURL(redisHost, fmt.Sprint(redisPort))
+func DumpServer(s Host, db *uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+	redisURL := RedisURL(s.Host, fmt.Sprint(s.Port))
 	getConnFunc := func(db *uint8) func(network, addr string) (radix.Conn, error) {
 		return func(network, addr string) (radix.Conn, error) {
-			dialOpts, err := redisDialOpts(redisPassword, tlsHandler, db)
+			dialOpts, err := redisDialOpts(s.Password, s.TlsHandler, db)
 			if err != nil {
 				return nil, err
 			}
@@ -396,7 +405,7 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, db *uint8
 	}
 
 	dbs := []uint8{}
-	if db != nil {
+	if db != AllDBs {
 		dbs = []uint8{*db}
 	} else {
 		client, err := radix.NewPool("tcp", redisURL, nWorkers, radix.PoolConnFunc(getConnFunc(nil)))
@@ -416,6 +425,8 @@ func DumpServer(redisHost string, redisPort int, redisPassword string, db *uint8
 		if err != nil {
 			return err
 		}
+		defer client.Close()
+
 		if err = DumpDB(client, &db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}

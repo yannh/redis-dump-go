@@ -99,11 +99,21 @@ func realMain() int {
 	logger := log.New(os.Stdout, "", 0)
 
 	var db = new(uint8)
+	// If the user passed a db as parameter, we only dump that db
 	if c.Db >= 0 {
 		*db = uint8(c.Db)
+	} else {
+		db = redisdump.AllDBs
 	}
 
-	if err = redisdump.DumpServer(c.Host, c.Port, url.QueryEscape(redisPassword), db, tlshandler, c.Filter, c.NWorkers, c.WithTTL, c.BatchSize, c.Noscan, logger, serializer, progressNotifs); err != nil {
+	s := redisdump.Host{
+		Host:       c.Host,
+		Port:       c.Port,
+		Password:   url.QueryEscape(redisPassword),
+		TlsHandler: tlshandler,
+	}
+
+	if err = redisdump.DumpServer(s, db, c.Filter, c.NWorkers, c.WithTTL, c.BatchSize, c.Noscan, logger, serializer, progressNotifs); err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err)
 		return 1
 	}
