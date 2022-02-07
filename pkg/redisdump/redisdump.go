@@ -349,8 +349,7 @@ func redisDialOpts(redisPassword string, tlsHandler *TlsHandler, db *uint8) ([]r
 	return dialOpts, nil
 }
 
-// DumpDB dumps all keys from a single Redis DB
-func DumpDB(client radix.Client, db *uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
+func dumpDB(client radix.Client, db *uint8, filter string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	keyGenerator := scanKeys
 	if noscan {
 		keyGenerator = scanKeysLegacy
@@ -427,7 +426,7 @@ func DumpServer(s Host, db *uint8, filter string, nWorkers int, withTTL bool, ba
 		}
 		defer client.Close()
 
-		if err = DumpDB(client, &db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
+		if err = dumpDB(client, &db, filter, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
