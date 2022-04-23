@@ -9,7 +9,7 @@ for DB in `seq 1 $NDBS`; do
 done
 
 echo "-> Dumping DB..."
-time /redis-dump-go -host redis -n 250 -output resp >backup
+time /redis-dump-go -host redis -n 250 -output commands >backup
 
 echo "-> Flushing DB and restoring dump..."
 redis-cli -h redis FLUSHALL
