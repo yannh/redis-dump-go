@@ -38,7 +38,7 @@ docker-build-static:
 	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make build-static
 
 docker-build-generator-static:
-	docker run -t -v $$PWD/.gitconfig:/root/ -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make build-generator-static
+	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make build-generator-static
 
 goreleaser-build-static:
 	docker run -e GOCACHE=/tmp -v $$PWD/.gitconfig:/root/.gitconfig -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.8.3 build --single-target --skip-post-hooks --rm-dist --snapshot
