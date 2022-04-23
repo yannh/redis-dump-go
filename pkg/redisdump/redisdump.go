@@ -355,6 +355,8 @@ func dumpDB(client radix.Client, db *uint8, filter string, nWorkers int, withTTL
 		keyGenerator = scanKeysLegacy
 	}
 
+	logger.Print(serializer([]string{"SELECT", fmt.Sprint(*db)}))
+
 	errors := make(chan error)
 	nErrors := 0
 	go func() {
