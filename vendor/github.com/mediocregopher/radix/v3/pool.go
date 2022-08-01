@@ -7,19 +7,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	errors "golang.org/x/xerrors"
+	"errors"
 
 	"github.com/mediocregopher/radix/v3/resp"
 	"github.com/mediocregopher/radix/v3/trace"
 )
 
-// ErrPoolEmpty is used by Pools created using the PoolOnEmptyErrAfter option
+// ErrPoolEmpty is used by Pools created using the PoolOnEmptyErrAfter option.
 var ErrPoolEmpty = errors.New("connection pool is empty")
 
 var errPoolFull = errors.New("connection pool is full")
 
 // ioErrConn is a Conn which tracks the last net.Error which was seen either
-// during an Encode call or a Decode call
+// during an Encode call or a Decode call.
 type ioErrConn struct {
 	Conn
 
@@ -28,10 +28,13 @@ type ioErrConn struct {
 	// level error, e.g. a timeout, disconnect, etc... Close is automatically
 	// called on the client when it encounters a critical network error
 	lastIOErr error
+
+	// conn create time
+	createdAt time.Time
 }
 
 func newIOErrConn(c Conn) *ioErrConn {
-	return &ioErrConn{Conn: c}
+	return &ioErrConn{Conn: c, createdAt: time.Now()}
 }
 
 func (ioc *ioErrConn) Encode(m resp.Marshaler) error {
@@ -39,7 +42,7 @@ func (ioc *ioErrConn) Encode(m resp.Marshaler) error {
 		return ioc.lastIOErr
 	}
 	err := ioc.Conn.Encode(m)
-	if nerr, _ := err.(net.Error); nerr != nil {
+	if nerr := net.Error(nil); errors.As(err, &nerr) {
 		ioc.lastIOErr = err
 	}
 	return err
@@ -50,7 +53,7 @@ func (ioc *ioErrConn) Decode(m resp.Unmarshaler) error {
 		return ioc.lastIOErr
 	}
 	err := ioc.Conn.Decode(m)
-	if nerr, _ := err.(net.Error); nerr != nil {
+	if nerr := net.Error(nil); errors.As(err, &nerr) {
 		ioc.lastIOErr = err
 	} else if err != nil && !errors.As(err, new(resp.ErrDiscarded)) {
 		ioc.lastIOErr = err
@@ -67,6 +70,13 @@ func (ioc *ioErrConn) Close() error {
 	return ioc.Conn.Close()
 }
 
+func (ioc *ioErrConn) expired(timeout time.Duration) bool {
+	if timeout <= 0 {
+		return false
+	}
+	return time.Since(ioc.createdAt) >= timeout
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 type poolOpts struct {
@@ -81,11 +91,22 @@ type poolOpts struct {
 	pipelineLimit         int
 	pipelineWindow        time.Duration
 	pt                    trace.PoolTrace
+	maxLifetime           time.Duration // maximum amount of time a connection may be reused
 }
 
 // PoolOpt is an optional behavior which can be applied to the NewPool function
-// to effect a Pool's behavior
+// to effect a Pool's behavior.
 type PoolOpt func(*poolOpts)
+
+// PoolMaxLifetime sets the maximum amount of time a connection may be reused.
+// Expired connections may be closed lazily before reuse.
+//
+// If d <= 0, connections are not closed due to a connection's age.
+func PoolMaxLifetime(d time.Duration) PoolOpt {
+	return func(po *poolOpts) {
+		po.maxLifetime = d
+	}
+}
 
 // PoolConnFunc tells the Pool to use the given ConnFunc when creating new
 // Conns to its redis instance. The ConnFunc can be used to set timeouts,
@@ -370,7 +391,11 @@ func NewPool(network, addr string, size int, opts ...PoolOpt) (*Pool, error) {
 		)
 	}
 	if p.opts.pingInterval > 0 && size > 0 {
-		p.atIntervalDo(p.opts.pingInterval, func() { p.Do(Cmd(nil, "PING")) })
+		p.atIntervalDo(p.opts.pingInterval, func() {
+			// don't worry about the return value, the whole point is to find
+			// erroring connections
+			_ = p.Do(Cmd(nil, "PING"))
+		})
 	}
 	if p.opts.refillInterval > 0 && size > 0 {
 		p.atIntervalDo(p.opts.refillInterval, p.doRefill)
@@ -463,7 +488,7 @@ func (p *Pool) doRefill() {
 	ioc, err := p.newConn(trace.PoolConnCreatedReasonRefill)
 	if err == nil {
 		p.put(ioc)
-	} else if err != errPoolFull {
+	} else if errors.Is(err, errPoolFull) {
 		p.err(err)
 	}
 }
@@ -498,13 +523,22 @@ func (p *Pool) doOverflowDrain() {
 
 func (p *Pool) getExisting() (*ioErrConn, error) {
 	// Fast-path if the pool is not empty. Return error if pool has been closed.
-	select {
-	case ioc, ok := <-p.pool:
-		if !ok {
-			return nil, errClientClosed
+	for {
+		select {
+		case ioc, ok := <-p.pool:
+			if !ok {
+				return nil, errClientClosed
+			}
+			if ioc.expired(p.opts.maxLifetime) {
+				ioc.Close()
+				p.traceConnClosed(trace.PoolConnClosedReasonConnExpired)
+				atomic.AddInt64(&p.totalConns, -1)
+				continue
+			}
+			return ioc, nil
+		default:
 		}
-		return ioc, nil
-	default:
+		break // Failed to get from pool, so jump out to conduct for the next move.
 	}
 
 	if p.opts.onEmptyWait == 0 {
@@ -522,14 +556,22 @@ func (p *Pool) getExisting() (*ioErrConn, error) {
 		tc = t.C
 	}
 
-	select {
-	case ioc, ok := <-p.pool:
-		if !ok {
-			return nil, errClientClosed
+	for {
+		select {
+		case ioc, ok := <-p.pool:
+			if !ok {
+				return nil, errClientClosed
+			}
+			if ioc.expired(p.opts.maxLifetime) {
+				ioc.Close()
+				p.traceConnClosed(trace.PoolConnClosedReasonConnExpired)
+				atomic.AddInt64(&p.totalConns, -1)
+				continue
+			}
+			return ioc, nil
+		case <-tc:
+			return nil, p.opts.errOnEmpty
 		}
-		return ioc, nil
-	case <-tc:
-		return nil, p.opts.errOnEmpty
 	}
 }
 
@@ -547,12 +589,15 @@ func (p *Pool) get() (*ioErrConn, error) {
 // discarded.
 func (p *Pool) put(ioc *ioErrConn) bool {
 	p.l.RLock()
+	var expired bool
 	if ioc.lastIOErr == nil && !p.closed {
-		select {
-		case p.pool <- ioc:
-			p.l.RUnlock()
-			return true
-		default:
+		if expired = ioc.expired(p.opts.maxLifetime); !expired {
+			select {
+			case p.pool <- ioc:
+				p.l.RUnlock()
+				return true
+			default:
+			}
 		}
 	}
 	p.l.RUnlock()
@@ -560,7 +605,11 @@ func (p *Pool) put(ioc *ioErrConn) bool {
 	// the pool might close here, but that's fine, because all that's happening
 	// at this point is that the connection is being closed
 	ioc.Close()
-	p.traceConnClosed(trace.PoolConnClosedReasonPoolFull)
+	if expired {
+		p.traceConnClosed(trace.PoolConnClosedReasonConnExpired)
+	} else {
+		p.traceConnClosed(trace.PoolConnClosedReasonPoolFull)
+	}
 	atomic.AddInt64(&p.totalConns, -1)
 	return false
 }
@@ -616,7 +665,7 @@ func (p *Pool) NumAvailConns() int {
 	return len(p.pool)
 }
 
-// Close implements the Close method of the Client
+// Close implements the Close method of the Client.
 func (p *Pool) Close() error {
 	p.l.Lock()
 	if p.closed {
