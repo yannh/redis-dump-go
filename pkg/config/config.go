@@ -18,6 +18,7 @@ type Config struct {
 	Output    string
 	Silent    bool
 	Tls       bool
+	Insecure  bool
 	CaCert    string
 	Cert      string
 	Key       string
@@ -52,6 +53,7 @@ func FromFlags(progName string, args []string) (Config, string, error) {
 	flags.StringVar(&c.Output, "output", "resp", "Output type - can be resp or commands")
 	flags.BoolVar(&c.Silent, "s", false, "Silent mode (disable logging of progress / stats)")
 	flags.BoolVar(&c.Tls, "tls", false, "Establish a secure TLS connection")
+	flags.BoolVar(&c.Insecure, "insecure", false, "Allow insecure TLS connection by skipping cert validation")
 	flags.StringVar(&c.CaCert, "cacert", "", "CA Certificate file to verify with")
 	flags.StringVar(&c.Cert, "cert", "", "Private key file to authenticate with")
 	flags.StringVar(&c.Key, "key", "", "SSL private key file path")
