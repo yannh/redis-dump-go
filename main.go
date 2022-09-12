@@ -112,6 +112,7 @@ func realMain() int {
 	s := redisdump.Host{
 		Host:       c.Host,
 		Port:       c.Port,
+		Username:   c.Username,
 		Password:   redisPassword,
 		TlsHandler: tlshandler,
 	}
