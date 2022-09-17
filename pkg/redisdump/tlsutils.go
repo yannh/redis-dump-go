@@ -3,31 +3,46 @@ package redisdump
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/ioutil"
 )
 
 type TlsHandler struct {
+	skipVerify bool
 	caCertPath string
 	certPath   string
 	keyPath    string
 }
 
-func NewTlsHandler(caCertPath, certPath, keyPath string) *TlsHandler {
+func NewTlsHandler(caCertPath, certPath, keyPath string, insecure bool) (*TlsHandler, error) {
 	if caCertPath == "" && certPath == "" && keyPath == "" {
-		return nil
+		if insecure {
+			return &TlsHandler{
+				skipVerify: true,
+			}, nil
+		} else {
+			return nil, errors.New("no cert is set. if skip cert validation to set -insecure option")
+		}
 	}
 
 	return &TlsHandler{
+		skipVerify: false,
 		caCertPath: caCertPath,
 		certPath:   certPath,
 		keyPath:    keyPath,
-	}
+	}, nil
 }
 
 func tlsConfig(tlsHandler *TlsHandler) (*tls.Config, error) {
 	if tlsHandler == nil {
 		return nil, nil
+	}
+
+	if tlsHandler.skipVerify {
+		return &tls.Config{
+			InsecureSkipVerify: true,
+		}, nil
 	}
 
 	certPool := x509.NewCertPool()
