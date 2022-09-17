@@ -3,7 +3,7 @@
 export DB=2
 export REDIS_PORT=6380
 export REDISDUMPGO_AUTH=somepassword
-export REDISCMD="redis-cli -h redis_secure -p $REDIS_PORT --pass $REDISDUMPGO_AUTH -n 2"
+export REDISCMD="redis-cli -h redis_with_password -p $REDIS_PORT --pass $REDISDUMPGO_AUTH -n 2"
 
 echo "-> Filling Redis with Mock Data..."
 $REDISCMD FLUSHDB
@@ -11,7 +11,7 @@ $REDISCMD FLUSHDB
 DBSIZE=`$REDISCMD dbsize`
 
 echo "-> Dumping DB..."
-time /redis-dump-go -host redis_secure -n 250 -port $REDIS_PORT -db $DB -output resp >backup
+time /redis-dump-go -host redis_with_password -n 250 -port $REDIS_PORT -db $DB -output resp >backup
 
 echo "-> Flushing DB and restoring dump..."
 $REDISCMD FLUSHDB
