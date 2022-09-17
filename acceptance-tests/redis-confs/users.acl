@@ -1,0 +1,2 @@
+user default on >somepassword allkeys allchannels +@all
+user test on >testpassword allkeys allchannels +@all

@@ -241,6 +241,7 @@ func TestParseKeyspaceInfo(t *testing.T) {
 
 func TestRedisDialOpts(t *testing.T) {
 	for i, testCase := range []struct {
+		redisUsername string
 		redisPassword string
 		tlsHandler    *TlsHandler
 		db            uint8
@@ -249,11 +250,20 @@ func TestRedisDialOpts(t *testing.T) {
 	}{
 		{
 			"",
+			"",
 			nil,
 			1,
 			2,
 			nil,
 		}, {
+			"",
+			"test",
+			&TlsHandler{},
+			1,
+			4,
+			nil,
+		}, {
+			"test",
 			"test",
 			&TlsHandler{},
 			1,
@@ -261,7 +271,7 @@ func TestRedisDialOpts(t *testing.T) {
 			nil,
 		},
 	} {
-		dOpts, err := redisDialOpts(testCase.redisPassword, testCase.tlsHandler, &testCase.db)
+		dOpts, err := redisDialOpts(testCase.redisUsername, testCase.redisPassword, testCase.tlsHandler, &testCase.db)
 		if err != testCase.err {
 			t.Errorf("expected error to be %+v, got %+v", testCase.err, err)
 		}
