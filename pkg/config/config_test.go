@@ -63,6 +63,20 @@ func TestFromFlags(t *testing.T) {
 			},
 		},
 		{
+			[]string{"-host", "redis", "-port", "1234", "-batchSize", "10", "-user", "test"},
+			Config{
+				Db:        -1,
+				Host:      "redis",
+				Port:      1234,
+				Filter:    "*",
+				BatchSize: 10,
+				NWorkers:  10,
+				WithTTL:   true,
+				Output:    "resp",
+				Username:  "test",
+			},
+		},
+		{
 			[]string{"-db", "1"},
 			Config{
 				Db:        1,
