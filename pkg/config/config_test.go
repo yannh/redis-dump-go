@@ -21,6 +21,7 @@ func TestFromFlags(t *testing.T) {
 				NWorkers:  10,
 				WithTTL:   true,
 				Output:    "resp",
+				Insecure:  false,
 			},
 		},
 		{
@@ -34,6 +35,7 @@ func TestFromFlags(t *testing.T) {
 				NWorkers:  10,
 				WithTTL:   true,
 				Output:    "resp",
+				Insecure:  false,
 			},
 		},
 		{
@@ -47,6 +49,7 @@ func TestFromFlags(t *testing.T) {
 				NWorkers:  10,
 				WithTTL:   false,
 				Output:    "resp",
+				Insecure:  false,
 			},
 		},
 		{
@@ -60,10 +63,11 @@ func TestFromFlags(t *testing.T) {
 				NWorkers:  5,
 				WithTTL:   true,
 				Output:    "commands",
+				Insecure:  false,
 			},
 		},
 		{
-			[]string{"-host", "redis", "-port", "1234", "-batchSize", "10", "-user", "test"},
+			[]string{"-host", "redis", "-port", "1234", "-batchSize", "10", "-user", "test", "-insecure"},
 			Config{
 				Db:        -1,
 				Host:      "redis",
@@ -74,6 +78,7 @@ func TestFromFlags(t *testing.T) {
 				WithTTL:   true,
 				Output:    "resp",
 				Username:  "test",
+				Insecure:  true,
 			},
 		},
 		{
@@ -87,6 +92,7 @@ func TestFromFlags(t *testing.T) {
 				NWorkers:  10,
 				WithTTL:   true,
 				Output:    "resp",
+				Insecure:  false,
 			},
 		},
 		{
@@ -101,6 +107,7 @@ func TestFromFlags(t *testing.T) {
 				WithTTL:   true,
 				Output:    "resp",
 				Help:      true,
+				Insecure:  false,
 			},
 		},
 	}
