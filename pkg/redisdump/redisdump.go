@@ -127,7 +127,7 @@ func RedisCmdSerializer(cmd []string) string {
 	buf := strings.Builder{}
 	buf.WriteString(fmt.Sprintf("%s", cmd[0]))
 	for i := 1; i < len(cmd); i++ {
-		if strings.Contains(cmd[i], " ") {
+		if strings.Contains(cmd[i], " ") || len(cmd[i]) == 0 {
 			buf.WriteString(fmt.Sprintf(" \"%s\"", cmd[i]))
 		} else {
 			buf.WriteString(fmt.Sprintf(" %s", cmd[i]))

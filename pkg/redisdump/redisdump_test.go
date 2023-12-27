@@ -214,6 +214,7 @@ func TestRedisCmdSerializer(t *testing.T) {
 		{command: []string{"HELLO"}, expected: "HELLO"},
 		{command: []string{"HGETALL", "key"}, expected: "HGETALL key"},
 		{command: []string{"SET", "key name 1", "key value 1"}, expected: "SET \"key name 1\" \"key value 1\""},
+		{command: []string{"SET", "key", ""}, expected: "SET key \"\""},
 		{command: []string{"HSET", "key1", "key value 1"}, expected: "HSET key1 \"key value 1\""},
 	}
 
