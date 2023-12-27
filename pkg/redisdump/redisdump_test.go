@@ -322,6 +322,12 @@ func (m *mockRadixAction) Run(conn radix.Conn) error {
 				*v = "list"
 			}
 		}
+		if strings.Contains(key, "zset") {
+			switch v := m.rcv.(type) {
+			case *string:
+				*v = "zset"
+			}
+		}
 
 		return nil
 	}
@@ -363,7 +369,19 @@ func (m *mockRadixAction) Run(conn radix.Conn) error {
 			*v = a
 
 		default:
-			fmt.Printf("ERRORRRR")
+			fmt.Printf("ERROR")
+		}
+		return nil
+	}
+
+	if m.cmd == "ZRANGEBYSCORE" {
+		switch v := m.rcv.(type) {
+		case *[]string:
+			a := []string{"listkey1", "1", "listkey2", "2"}
+			*v = a
+
+		default:
+			fmt.Printf("ERROR")
 		}
 		return nil
 	}
@@ -408,6 +426,11 @@ func TestDumpKeys(t *testing.T) {
 			true,
 			"^SET somestring stringvalue\nEXPIREAT somestring [0-9]+\n$",
 		},
+		{
+			[]string{"somezset"},
+			false,
+			"^ZADD somezset 1 listkey1 2 listkey2\n$",
+		},
 	} {
 		var m mockRadixClient
 		var b bytes.Buffer
@@ -449,14 +472,17 @@ func TestScanKeysLegacy(t *testing.T) {
 		keyBatches := make(chan []string)
 
 		n := 0
+		done := make(chan bool)
 		go func() {
 			for b := range keyBatches {
 				n += len(b)
 			}
+			done <- true
 		}()
 
 		err := scanKeysLegacy(&m, getMockRadixAction, 0, 100, "*", keyBatches, nil)
 		close(keyBatches)
+		<-done
 		if err != testCase.err {
 			t.Errorf("test %d, expected err to be %s, got %s", i, testCase.err, err)
 		}
