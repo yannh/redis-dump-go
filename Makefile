@@ -32,20 +32,20 @@ push-image:
 	docker push ghcr.io/yannh/redis-dump-go:${RELEASE_VERSION}
 
 docker-test:
-	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make test
+	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.21 make test
 
 docker-build-static:
-	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make build-static
+	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.21 make build-static
 
 docker-build-generator-static:
-	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.18 make build-generator-static
+	docker run -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go golang:1.21 make build-generator-static
 
 goreleaser-build-static:
-	docker run -e GOCACHE=/tmp -v $$PWD/.gitconfig:/root/.gitconfig -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.8.3 build --single-target --skip-post-hooks --rm-dist --snapshot
+	docker run -e GOCACHE=/tmp -v $$PWD/.gitconfig:/root/.gitconfig -t -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.21.4 build --single-target --skip-post-hooks --rm-dist --snapshot
 	cp dist/redis-dump-go_linux_amd64_v1/redis-dump-go bin/
 
 release:
-	docker run -e GITHUB_TOKEN -t -v $$PWD/.gitconfig:/root/.gitconfig -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.8.3 release --rm-dist
+	docker run -e GITHUB_TOKEN -t -v $$PWD/.gitconfig:/root/.gitconfig -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.21.4 release --rm-dist
 
 acceptance-tests: docker-build-static docker-build-generator-static
 	docker-compose run tests
