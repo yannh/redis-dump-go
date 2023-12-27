@@ -75,8 +75,6 @@ func realMain() int {
 		log.Fatalf("Failed parsing parameter flag: can only be resp or json")
 	}
 
-	redisPassword := os.Getenv("REDISDUMPGO_AUTH")
-
 	progressNotifs := make(chan redisdump.ProgressNotification)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -113,7 +111,7 @@ func realMain() int {
 		Host:       c.Host,
 		Port:       c.Port,
 		Username:   c.Username,
-		Password:   redisPassword,
+		Password:   c.Password,
 		TlsHandler: tlshandler,
 	}
 
