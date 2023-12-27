@@ -201,14 +201,22 @@ func NewCluster(clusterAddrs []string, opts ...ClusterOpt) (*Cluster, error) {
 		}
 	}
 
+	var err error
+
 	// make a pool to base the cluster on
 	for _, addr := range clusterAddrs {
-		p, err := c.co.pf("tcp", addr)
-		if err != nil {
+
+		var p Client
+
+		if p, err = c.co.pf("tcp", addr); err != nil {
 			continue
 		}
 		c.pools[addr] = p
 		break
+	}
+
+	if len(c.pools) == 0 {
+		return nil, fmt.Errorf("could not connect to any redis instances, last error was: %w", err)
 	}
 
 	p, err := c.pool("")
@@ -486,10 +494,9 @@ func (c *Cluster) syncEvery(d time.Duration) {
 	}()
 }
 
-func (c *Cluster) addrForKey(key string) string {
+// v3.8.5 add the getting master node without lock to fix the fix deadlock.
+func (c *Cluster) addrForKeyWithNoLock(key string) string {
 	s := ClusterSlot([]byte(key))
-	c.l.RLock()
-	defer c.l.RUnlock()
 	for _, t := range c.primTopo {
 		for _, slot := range t.Slots {
 			if s >= slot[0] && s < slot[1] {
@@ -500,10 +507,16 @@ func (c *Cluster) addrForKey(key string) string {
 	return ""
 }
 
+func (c *Cluster) addrForKey(key string) string {
+	c.l.RLock()
+	defer c.l.RUnlock()
+	return c.addrForKeyWithNoLock(key)
+}
+
 func (c *Cluster) secondaryAddrForKey(key string) string {
 	c.l.RLock()
 	defer c.l.RUnlock()
-	primAddr := c.addrForKey(key)
+	primAddr := c.addrForKeyWithNoLock(key)
 	for addr := range c.secondaries[primAddr] {
 		return addr
 	}

@@ -1,11 +1,11 @@
-# github.com/mediocregopher/radix/v3 v3.8.0
+# github.com/mediocregopher/radix/v3 v3.8.1
 ## explicit; go 1.13
 github.com/mediocregopher/radix/v3
 github.com/mediocregopher/radix/v3/internal/bytesutil
 github.com/mediocregopher/radix/v3/resp
 github.com/mediocregopher/radix/v3/resp/resp2
 github.com/mediocregopher/radix/v3/trace
-# golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898
-## explicit; go 1.11
+# golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028
+## explicit; go 1.18
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
