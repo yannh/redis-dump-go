@@ -37,37 +37,47 @@ a Github Account might be required / bandwidth costs might be applicable.
 ```
 $ ./bin/redis-dump-go -h
 Usage of ./bin/redis-dump-go:
-  -batchSize int
+    -batchSize int
         HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time (default 1000)
-  -db uint
-        only dump this database (default: all databases)
-  -filter string
-        Key filter to use (default "*")
-  -host string
-        Server host (default "127.0.0.1")
-  -n int
-        Parallel workers (default 10)
-  -noscan
-        Use KEYS * instead of SCAN - for Redis <=2.8
-  -output string
-        Output type - can be resp or commands (default "resp")
-  -port int
-        Server port (default 6379)
-  -s    Silent mode (disable logging of progress / stats)
-  -ttl
-        Preserve Keys TTL (default true)
+    -cacert string
+            CA Certificate file to verify with
+    -cert string
+            Private key file to authenticate with
+    -db int
+            only dump this database (default: all databases) (default -1)
+    -filter string
+            Key filter to use (default "*")
+    -h    show help information
+    -host string
+            Server host (default "127.0.0.1")
+    -insecure
+            Allow insecure TLS connection by skipping cert validation
+    -key string
+            SSL private key file path
+    -n int
+            Parallel workers (default 10)
+    -noscan
+            Use KEYS * instead of SCAN - for Redis <=2.8
+    -output string
+            Output type - can be resp or commands (default "resp")
+    -password string
+            Password
+    -port int
+            Server port (default 6379)
+    -s    Silent mode (disable logging of progress / stats)
+    -tls
+            Establish a secure TLS connection
+    -ttl
+            Preserve Keys TTL (default true)
+    -user string
+            Username
 
 $ ./bin/redis-dump-go > dump.resp
 Database 0: 9 element dumped
 Database 1: 1 element dumped
 ```
 
-For password-protected Redis servers, set the shell variable REDISDUMPGO\_AUTH:
 
-```
-$ export REDISDUMPGO_AUTH=myRedisPassword
-$ redis-dump-go
-```
 
 ## Build
 
