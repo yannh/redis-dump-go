@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.20.2
 MAINTAINER Yann HAMON <yann@mandragor.org>
 RUN apk add ca-certificates
 COPY redis-dump-go /
