@@ -47,7 +47,7 @@ goreleaser-build-static:
 	cp dist/redis-dump-go_linux_amd64_v1/redis-dump-go bin/
 
 release:
-	docker run -e GITHUB_TOKEN -e GIT_OWNER -t -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v1.22.1 release --clean
+	docker run -e GITHUB_TOKEN -e GIT_OWNER -t -v /var/run/docker.sock:/var/run/docker.sock -v $$PWD:/go/src/github.com/yannh/redis-dump-go -w /go/src/github.com/yannh/redis-dump-go goreleaser/goreleaser:v2.1.0 release --clean
 
 acceptance-tests: docker-build-static docker-build-generator-static
 	docker-compose run tests
