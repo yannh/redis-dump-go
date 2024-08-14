@@ -11,6 +11,7 @@ type Config struct {
 	Port      int
 	Db        int
 	Username  string
+	Password  string
 	Filter    string
 	Noscan    bool
 	BatchSize int
@@ -47,6 +48,7 @@ func FromFlags(progName string, args []string) (Config, string, error) {
 	flags.IntVar(&c.Port, "port", 6379, "Server port")
 	flags.IntVar(&c.Db, "db", -1, "only dump this database (default: all databases)")
 	flags.StringVar(&c.Username, "user", "", "Username")
+	flags.StringVar(&c.Password, "password", "", "Password")
 	flags.StringVar(&c.Filter, "filter", "*", "Key filter to use")
 	flags.BoolVar(&c.Noscan, "noscan", false, "Use KEYS * instead of SCAN - for Redis <=2.8")
 	flags.IntVar(&c.BatchSize, "batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time")
