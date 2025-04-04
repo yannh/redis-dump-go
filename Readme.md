@@ -34,7 +34,7 @@ a Github Account might be required / bandwidth costs might be applicable.
 
 ## Run
 
-```
+```bash
 $ ./bin/redis-dump-go -h
 Usage: ./bin/redis-dump-go [OPTION]...
   -batchSize int
@@ -77,7 +77,7 @@ Database 1: 1 element dumped
 
 For password-protected Redis servers, set the shell variable REDISDUMPGO\_AUTH:
 
-```
+```bash
 $ export REDISDUMPGO_AUTH=myRedisPassword
 $ redis-dump-go
 ```
@@ -86,7 +86,7 @@ $ redis-dump-go
 
 Given a correctly configured Go environment:
 
-```
+```bash
 $ go get github.com/yannh/redis-dump-go
 $ cd ${GOPATH}/src/github.com/yannh/redis-dump-go
 $ go test ./...
@@ -95,7 +95,7 @@ $ go install
 
 ## Importing the data
 
-```
+```bash
 redis-cli --pipe < redis-backup.txt
 ```
 
