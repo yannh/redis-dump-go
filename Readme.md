@@ -36,15 +36,24 @@ a Github Account might be required / bandwidth costs might be applicable.
 
 ```
 $ ./bin/redis-dump-go -h
-Usage of ./bin/redis-dump-go:
+Usage: ./bin/redis-dump-go [OPTION]...
   -batchSize int
         HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time (default 1000)
-  -db uint
-        only dump this database (default: all databases)
+  -cacert string
+        CA Certificate file to verify with
+  -cert string
+        Private key file to authenticate with
+  -db int
+        only dump this database (default: all databases) (default -1)
   -filter string
         Key filter to use (default "*")
+  -h    show help information
   -host string
         Server host (default "127.0.0.1")
+  -insecure
+        Allow insecure TLS connection by skipping cert validation
+  -key string
+        SSL private key file path
   -n int
         Parallel workers (default 10)
   -noscan
@@ -54,8 +63,12 @@ Usage of ./bin/redis-dump-go:
   -port int
         Server port (default 6379)
   -s    Silent mode (disable logging of progress / stats)
+  -tls
+        Establish a secure TLS connection
   -ttl
         Preserve Keys TTL (default true)
+  -user string
+        Username
 
 $ ./bin/redis-dump-go > dump.resp
 Database 0: 9 element dumped
