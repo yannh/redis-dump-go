@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o upstash-redis-dum
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates redis
 
 RUN addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser
