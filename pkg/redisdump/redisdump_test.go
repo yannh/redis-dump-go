@@ -452,7 +452,7 @@ func TestDumpKeys(t *testing.T) {
 		var m mockRadixClient
 		var b bytes.Buffer
 		l := log.New(&b, "", 0)
-		err := dumpKeys(&m, getMockRadixAction, testCase.keys, testCase.skipFilters, testCase.withTTL, 5, l, RedisCmdSerializer)
+		err := dumpKeys(&m, getMockRadixAction, testCase.keys, testCase.skipFilters, testCase.withTTL, 0, 0, 5, l, RedisCmdSerializer)
 		if err != nil {
 			t.Errorf("received error %+v", err)
 		}
@@ -570,6 +570,83 @@ func TestShouldSkipKey(t *testing.T) {
 		if result != testCase.expected {
 			t.Errorf("test %d: key=%s, skipFilters=%v, expected %v, got %v",
 				i, testCase.key, testCase.skipFilters, testCase.expected, result)
+		}
+	}
+}
+
+func TestGenerateRandomTTL(t *testing.T) {
+	for i, testCase := range []struct {
+		min      int
+		max      int
+		shouldBe func(int64) bool
+	}{
+		{
+			1800,
+			1900,
+			func(ttl int64) bool { return ttl >= 1800 && ttl <= 1900 },
+		},
+		{
+			100,
+			100,
+			func(ttl int64) bool { return ttl == 100 },
+		},
+		{
+			0,
+			100,
+			func(ttl int64) bool { return ttl == 0 },
+		},
+		{
+			-1,
+			100,
+			func(ttl int64) bool { return ttl == 0 },
+		},
+		{
+			100,
+			50,
+			func(ttl int64) bool { return ttl == 0 },
+		},
+	} {
+		ttl := generateRandomTTL(testCase.min, testCase.max)
+		if !testCase.shouldBe(ttl) {
+			t.Errorf("test %d: min=%d, max=%d, got ttl=%d",
+				i, testCase.min, testCase.max, ttl)
+		}
+	}
+}
+
+func TestDumpKeysWithRandomTTL(t *testing.T) {
+	for i, testCase := range []struct {
+		keys         []string
+		withTTL      bool
+		minRandomTTL int
+		maxRandomTTL int
+		expectMatch  string
+	}{
+		{
+			[]string{"somestring"},
+			true,
+			1800,
+			1900,
+			"^SET somestring stringvalue\nEXPIREAT somestring [0-9]+\n$",
+		},
+		{
+			[]string{"somestring"},
+			false,
+			1800,
+			1900,
+			"^SET somestring stringvalue\n$",
+		},
+	} {
+		var m mockRadixClient
+		var b bytes.Buffer
+		l := log.New(&b, "", 0)
+		err := dumpKeys(&m, getMockRadixAction, testCase.keys, nil, testCase.withTTL, testCase.minRandomTTL, testCase.maxRandomTTL, 5, l, RedisCmdSerializer)
+		if err != nil {
+			t.Errorf("test %d: received error %+v", i, err)
+		}
+		match, _ := regexp.MatchString(testCase.expectMatch, b.String())
+		if !match {
+			t.Errorf("test %d: expected to match %s, got %s", i, testCase.expectMatch, b.String())
 		}
 	}
 }

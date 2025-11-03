@@ -162,6 +162,23 @@ func TestFromFlags(t *testing.T) {
 				Insecure:    false,
 			},
 		},
+		{
+			[]string{"-min-random-ttl", "1800", "-max-random-ttl", "1900"},
+			Config{
+				Db:           -1,
+				Host:         "127.0.0.1",
+				Port:         6379,
+				Filter:       "*",
+				SkipFilters:  nil,
+				BatchSize:    1000,
+				NWorkers:     10,
+				WithTTL:      true,
+				MinRandomTTL: 1800,
+				MaxRandomTTL: 1900,
+				Output:       "resp",
+				Insecure:     false,
+			},
+		},
 	}
 
 	for i, testCase := range testCases {

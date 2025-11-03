@@ -20,24 +20,26 @@ func (s *stringSlice) Set(value string) error {
 }
 
 type Config struct {
-	Host        string
-	Port        int
-	Db          int
-	Username    string
-	Filter      string
-	SkipFilters []string
-	Noscan      bool
-	BatchSize   int
-	NWorkers    int
-	WithTTL     bool
-	Output      string
-	Silent      bool
-	Tls         bool
-	Insecure    bool
-	CaCert      string
-	Cert        string
-	Key         string
-	Help        bool
+	Host           string
+	Port           int
+	Db             int
+	Username       string
+	Filter         string
+	SkipFilters    []string
+	Noscan         bool
+	BatchSize      int
+	NWorkers       int
+	WithTTL        bool
+	MinRandomTTL   int
+	MaxRandomTTL   int
+	Output         string
+	Silent         bool
+	Tls            bool
+	Insecure       bool
+	CaCert         string
+	Cert           string
+	Key            string
+	Help           bool
 }
 
 func isFlagPassed(flags *flag.FlagSet, name string) bool {
@@ -68,6 +70,8 @@ func FromFlags(progName string, args []string) (Config, string, error) {
 	flags.IntVar(&c.BatchSize, "batchSize", 1000, "HSET/RPUSH/SADD/ZADD only add 'batchSize' items at a time")
 	flags.IntVar(&c.NWorkers, "n", 10, "Parallel workers")
 	flags.BoolVar(&c.WithTTL, "ttl", true, "Preserve Keys TTL")
+	flags.IntVar(&c.MinRandomTTL, "min-random-ttl", 0, "Minimum random TTL in seconds (when > 0, TTL queries are skipped)")
+	flags.IntVar(&c.MaxRandomTTL, "max-random-ttl", 0, "Maximum random TTL in seconds (when > 0, TTL queries are skipped)")
 	flags.StringVar(&c.Output, "output", "resp", "Output type - can be resp or commands")
 	flags.BoolVar(&c.Silent, "s", false, "Silent mode (disable logging of progress / stats)")
 	flags.BoolVar(&c.Tls, "tls", false, "Establish a secure TLS connection")

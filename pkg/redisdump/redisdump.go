@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,16 @@ import (
 )
 
 var AllDBs *uint8 = nil
+
+// generateRandomTTL generates a random TTL between min and max (inclusive)
+func generateRandomTTL(min, max int) int64 {
+	if min <= 0 || max <= 0 || min > max {
+		return 0
+	}
+	// Use math/rand with time-based seeding for better randomness
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return int64(r.Intn(max-min+1) + min)
+}
 
 // shouldSkipKey checks if a key matches any of the skip filter patterns.
 // If a pattern is malformed (invalid syntax), it is ignored and won't match any keys.
@@ -163,10 +174,21 @@ func RESPSerializer(cmd []string) string {
 
 type radixCmder func(rcv interface{}, cmd string, args ...string) radix.CmdAction
 
-func dumpKeys(client radix.Client, cmd radixCmder, keys []string, skipFilters []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer) error {
+func dumpKeys(client radix.Client, cmd radixCmder, keys []string, skipFilters []string, withTTL bool, minRandomTTL int, maxRandomTTL int, batchSize int, logger *log.Logger, serializer Serializer) error {
 	var err error
 	var redisCmds [][]string
+	
+	// Determine if we should use random TTL
+	useRandomTTL := minRandomTTL > 0 && maxRandomTTL > 0 && minRandomTTL <= maxRandomTTL
 
+	// First pass: get all key types and separate string keys for batch MGET
+	type keyInfo struct {
+		key     string
+		keyType string
+	}
+	var keyInfos []keyInfo
+	var stringKeys []string
+	
 	for _, key := range keys {
 		// Skip keys that match any skip filter pattern
 		if shouldSkipKey(key, skipFilters) {
@@ -174,51 +196,94 @@ func dumpKeys(client radix.Client, cmd radixCmder, keys []string, skipFilters []
 		}
 
 		keyType := ""
-
 		err = client.Do(cmd(&keyType, "TYPE", key))
 		if err != nil {
 			return err
 		}
-		switch keyType {
-		case "string":
-			var val string
-			if err = client.Do(cmd(&val, "GET", key)); err != nil {
+		
+		if keyType == "string" {
+			stringKeys = append(stringKeys, key)
+		}
+		keyInfos = append(keyInfos, keyInfo{key: key, keyType: keyType})
+	}
+
+	// Batch fetch string values using MGET
+	stringValues := make(map[string]string)
+	if len(stringKeys) > 0 {
+		// Process string keys in batches of up to 1000
+		mgetBatchSize := 1000
+		for i := 0; i < len(stringKeys); i += mgetBatchSize {
+			end := i + mgetBatchSize
+			if end > len(stringKeys) {
+				end = len(stringKeys)
+			}
+			batch := stringKeys[i:end]
+			
+			// MGET command expects variadic args after the command
+			var vals []string
+			args := make([]string, len(batch))
+			copy(args, batch)
+			
+			if err = client.Do(cmd(&vals, "MGET", args...)); err != nil {
 				return err
 			}
-			redisCmds = [][]string{stringToRedisCmd(key, val)}
+			
+			// Map values to keys
+			for j, val := range vals {
+				if j < len(batch) {
+					stringValues[batch[j]] = val
+				}
+			}
+		}
+	}
+
+	// Second pass: process all keys with their values
+	for _, ki := range keyInfos {
+		switch ki.keyType {
+		case "string":
+			val, ok := stringValues[ki.key]
+			if !ok {
+				// Fallback to GET if MGET didn't work
+				if err = client.Do(cmd(&val, "GET", ki.key)); err != nil {
+					return err
+				}
+			}
+			redisCmds = [][]string{stringToRedisCmd(ki.key, val)}
 
 		case "list":
 			var val []string
-			if err = client.Do(cmd(&val, "LRANGE", key, "0", "-1")); err != nil {
+			if err = client.Do(cmd(&val, "LRANGE", ki.key, "0", "-1")); err != nil {
 				return err
 			}
-			redisCmds = listToRedisCmds(key, val, batchSize)
+			redisCmds = listToRedisCmds(ki.key, val, batchSize)
 
 		case "set":
 			var val []string
-			if err = client.Do(cmd(&val, "SMEMBERS", key)); err != nil {
+			if err = client.Do(cmd(&val, "SMEMBERS", ki.key)); err != nil {
 				return err
 			}
-			redisCmds = setToRedisCmds(key, val, batchSize)
+			redisCmds = setToRedisCmds(ki.key, val, batchSize)
 
 		case "hash":
 			var val map[string]string
-			if err = client.Do(cmd(&val, "HGETALL", key)); err != nil {
+			if err = client.Do(cmd(&val, "HGETALL", ki.key)); err != nil {
 				return err
 			}
-			redisCmds = hashToRedisCmds(key, val, batchSize)
+			redisCmds = hashToRedisCmds(ki.key, val, batchSize)
 
 		case "zset":
 			var val []string
-			if err = client.Do(cmd(&val, "ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")); err != nil {
+			if err = client.Do(cmd(&val, "ZRANGEBYSCORE", ki.key, "-inf", "+inf", "WITHSCORES")); err != nil {
 				return err
 			}
-			redisCmds = zsetToRedisCmds(key, val, batchSize)
+			redisCmds = zsetToRedisCmds(ki.key, val, batchSize)
 
 		case "none":
+			// Skip keys that don't exist (deleted between SCAN and TYPE)
+			continue
 
 		default:
-			return fmt.Errorf("Key %s is of unreconized type %s", key, keyType)
+			return fmt.Errorf("Key %s is of unrecognized type %s", ki.key, ki.keyType)
 		}
 
 		for _, redisCmd := range redisCmds {
@@ -227,11 +292,17 @@ func dumpKeys(client radix.Client, cmd radixCmder, keys []string, skipFilters []
 
 		if withTTL {
 			var ttl int64
-			if err = client.Do(cmd(&ttl, "TTL", key)); err != nil {
-				return err
+			if useRandomTTL {
+				// Use random TTL instead of querying Redis
+				ttl = generateRandomTTL(minRandomTTL, maxRandomTTL)
+			} else {
+				// Query TTL from Redis
+				if err = client.Do(cmd(&ttl, "TTL", ki.key)); err != nil {
+					return err
+				}
 			}
 			if ttl > 0 {
-				cmd := ttlToRedisCmd(key, ttl)
+				cmd := ttlToRedisCmd(ki.key, ttl)
 				logger.Print(serializer(cmd))
 			}
 		}
@@ -240,9 +311,9 @@ func dumpKeys(client radix.Client, cmd radixCmder, keys []string, skipFilters []
 	return nil
 }
 
-func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, skipFilters []string, withTTL bool, batchSize int, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
+func dumpKeysWorker(client radix.Client, keyBatches <-chan []string, skipFilters []string, withTTL bool, minRandomTTL int, maxRandomTTL int, batchSize int, logger *log.Logger, serializer Serializer, errors chan<- error, done chan<- bool) {
 	for keyBatch := range keyBatches {
-		if err := dumpKeys(client, radix.Cmd, keyBatch, skipFilters, withTTL, batchSize, logger, serializer); err != nil {
+		if err := dumpKeys(client, radix.Cmd, keyBatch, skipFilters, withTTL, minRandomTTL, maxRandomTTL, batchSize, logger, serializer); err != nil {
 			errors <- err
 		}
 	}
@@ -369,7 +440,7 @@ func redisDialOpts(redisUsername string, redisPassword string, tlsHandler *TlsHa
 	return dialOpts, nil
 }
 
-func dumpDB(client radix.Client, db *uint8, filter string, skipFilters []string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
+func dumpDB(client radix.Client, db *uint8, filter string, skipFilters []string, nWorkers int, withTTL bool, minRandomTTL int, maxRandomTTL int, batchSize int, noscan bool, logger *log.Logger, serializer Serializer, progress chan<- ProgressNotification) error {
 	keyGenerator := scanKeys
 	if noscan {
 		keyGenerator = scanKeysLegacy
@@ -389,7 +460,7 @@ func dumpDB(client radix.Client, db *uint8, filter string, skipFilters []string,
 	done := make(chan bool)
 	keyBatches := make(chan []string)
 	for i := 0; i < nWorkers; i++ {
-		go dumpKeysWorker(client, keyBatches, skipFilters, withTTL, batchSize, logger, serializer, errors, done)
+		go dumpKeysWorker(client, keyBatches, skipFilters, withTTL, minRandomTTL, maxRandomTTL, batchSize, logger, serializer, errors, done)
 	}
 
 	keyGenerator(client, radix.Cmd, *db, 100, filter, keyBatches, progress)
@@ -413,7 +484,7 @@ type Host struct {
 // DumpServer dumps all Keys from the redis server given by redisURL,
 // to the Logger logger. Progress notification informations
 // are regularly sent to the channel progressNotifications
-func DumpServer(s Host, db *uint8, filter string, skipFilters []string, nWorkers int, withTTL bool, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
+func DumpServer(s Host, db *uint8, filter string, skipFilters []string, nWorkers int, withTTL bool, minRandomTTL int, maxRandomTTL int, batchSize int, noscan bool, logger *log.Logger, serializer func([]string) string, progress chan<- ProgressNotification) error {
 	redisURL := RedisURL(s.Host, fmt.Sprint(s.Port))
 	getConnFunc := func(db *uint8) func(network, addr string) (radix.Conn, error) {
 		return func(network, addr string) (radix.Conn, error) {
@@ -449,7 +520,7 @@ func DumpServer(s Host, db *uint8, filter string, skipFilters []string, nWorkers
 		}
 		defer client.Close()
 
-		if err = dumpDB(client, &db, filter, skipFilters, nWorkers, withTTL, batchSize, noscan, logger, serializer, progress); err != nil {
+		if err = dumpDB(client, &db, filter, skipFilters, nWorkers, withTTL, minRandomTTL, maxRandomTTL, batchSize, noscan, logger, serializer, progress); err != nil {
 			return err
 		}
 	}
